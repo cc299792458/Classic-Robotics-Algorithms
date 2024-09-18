@@ -1,5 +1,5 @@
 # Basic-Robotics
-This repository provides key robotics algorithms, including kinematics, dynamics, planning, and control, with many based on [Modern Robotics: Mechanics, Planning, and Control](https://hades.mech.northwestern.edu/images/7/7f/MR.pdf) which I call them basic algorithms.
+This repository provides key robotics algorithms, including kinematics, dynamics, planning, and control, with many based on [Modern Robotics: Mechanics, Planning, and Control](https://hades.mech.northwestern.edu/images/7/7f/MR.pdf) which I call them [basic algorithms](https://github.com/cc299792458/Classic-Robotics-Algorithms/tree/main/basic_algos).
 
 ## The list of basic ones is:
 - [Trajectory Genearation](https://github.com/cc299792458/Classic-Robotics-Algorithms/tree/main/basic_algos/trajectory_generation)
