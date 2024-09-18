@@ -2,9 +2,11 @@
     Use Third-Order Polynomial Time Scaling to generate a set of trajectory points
 """
 
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
+from utils.misc_utils import set_seed
 from basic_algos.trajectory_generation.point_to_point_trajectories import third_order_polynomial_time_scaling
 
 def generate_trajectory_points(coefficients, duration, num_points=100):
@@ -24,7 +26,7 @@ def generate_trajectory_points(coefficients, duration, num_points=100):
     positions = A * time_steps**3 + B * time_steps**2 + C * time_steps + D
     return positions
 
-def plot_trajectory(coefficients, duration, trajectory_points, num_points=100):
+def plot_trajectory(coefficients, duration, trajectory_points, num_points=100, save_path=None):
     """
     Plot the position, velocity, and acceleration of the trajectory.
     
@@ -33,6 +35,7 @@ def plot_trajectory(coefficients, duration, trajectory_points, num_points=100):
         duration (float): Total duration of the trajectory.
         trajectory_points (np.ndarray): Generated trajectory points.
         num_points (int): Number of points in the trajectory.
+        save_path (str, optional): Path to save the plot image. If None, the plot is not saved.
     """
     A, B, C, D = coefficients
     time_steps = np.linspace(0, duration, num_points)
@@ -69,20 +72,33 @@ def plot_trajectory(coefficients, duration, trajectory_points, num_points=100):
     plt.legend()
     
     plt.tight_layout()
+    
+    # Save the plot if a save path is provided
+    if save_path:
+        plt.savefig(save_path, dpi=300)
+        print(f"Plot saved as {save_path}")
+    
+    # Show the plot
     plt.show()
 
 if __name__ == '__main__':
+    set_seed()
+    log_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the current script
+    
     start_pos = 0
     end_pos = 10
     duration = 5
     max_vel = 1.0
+
     # Generate third-order polynomial coefficients
     coefficients, duration = third_order_polynomial_time_scaling(start_pos, end_pos, start_vel=0, end_vel=0.0, duration=duration, max_vel=max_vel)
-    print(f"Third Order Polynomial Coefficients (A, B, C, D): {coefficients}, Duration {duration}" )
+    print(f"Third Order Polynomial Coefficients (A, B, C, D): {coefficients}, Duration {duration}")
 
     # Generate trajectory points
     trajectory_points = generate_trajectory_points(coefficients, duration)
-    # print("Trajectory Points:", trajectory_points)
-
-    # Plot the trajectory
-    plot_trajectory(coefficients, duration, trajectory_points)
+    
+    # Define the save path for the image in the same directory as the script
+    save_path = os.path.join(log_dir, 'third_order_trajectory_plot.png')
+    
+    # Plot the trajectory and save the image
+    plot_trajectory(coefficients, duration, trajectory_points, save_path=save_path)

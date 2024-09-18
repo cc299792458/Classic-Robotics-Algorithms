@@ -78,9 +78,9 @@ def fifth_order_polynomial_time_scaling(start_pos, end_pos, start_vel=0, end_vel
         duration = max(duration_vel, duration_acc, duration) if duration is not None else max(duration_vel, duration_acc)
 
     # Calculate coefficients using the precomputed formulas
-    A = (6 * (start_pos - end_pos) + 3 * (start_vel + end_vel) * duration + (end_acc - start_acc) * duration**2) / (2 * duration**5)
-    B = (15 * (end_pos - start_pos) + (8 * start_vel + 7 * end_vel) * duration + (3 * start_acc - 2 * end_acc) * duration**2) / (2 * duration**4)
-    C = (10 * (start_pos - end_pos) + (6 * end_vel + 4 * start_vel) * duration + (end_acc - start_acc) * duration**2) / (2 * duration**3)
+    A = (12 * delta_pos - 6 * (start_vel + end_vel) * duration - (end_acc - start_acc) * duration**2) / (2 * duration**5)
+    B = (-30 * delta_pos + (16 * start_vel + 14 * end_vel) * duration + (3 * start_acc - 2 * end_acc) * duration**2) / (2 * duration**4)
+    C = (20 * delta_pos - (12 * start_vel + 8 * end_vel) * duration - (3 * start_acc - end_acc) * duration**2) / (2 * duration**3)
     D = start_acc / 2
     E = start_vel
     F = start_pos
