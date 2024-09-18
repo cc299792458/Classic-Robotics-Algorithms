@@ -49,14 +49,16 @@ def s_curve_time_scalings(start_pos, end_pos, max_vel, max_acc, jerk):
         max_vel = jerk * (t_jerk**2) / 2  # Maximum velocity achievable in this profile
         t_acc = 0  # No constant acceleration phase
         d_jerk = (1/6) * jerk * (t_jerk ** 3)
-        d_total_acc = 2 * d_jerk
+        d_total_jerk = 2 * d_jerk
+        d_acc = 0
+        d_total_acc = 0
         t_constant_vel = 0
     elif total_distance < d_total_jerk + d_total_acc:
         # Case 2: Short Distance - Adjust Velocity
         max_vel = (total_distance - d_total_jerk) / (2 * t_jerk)
         t_acc = 0  # No constant acceleration phase
         t_constant_vel = 0
-    elif max_vel * max_vel < 4 * max_vel * jerk: 
+    elif max_vel * max_vel < 4 * max_acc * jerk: 
         # Case 3: Low Velocity - Cannot reach maximum acceleration
         # Adjust the velocity profile to accommodate the low maximum velocity
         t_acc = 0  # No constant acceleration phase
@@ -228,10 +230,10 @@ if __name__ == '__main__':
     set_seed()
     log_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the current script
     # Setting parameters
-    start_pos = 0
-    end_pos = 10
-    max_vel = 2
-    max_acc = 1
+    start_pos = 0.0
+    end_pos = 20.0
+    max_vel = 2.0
+    max_acc = 1.0
     jerk = 0.5
 
     # Generate S-curve motion profile parameters
