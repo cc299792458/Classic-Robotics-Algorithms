@@ -5,7 +5,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from basic_algorithms.trajectory_generation.point_to_point_trajectories import third_order_polynomial_time_scaling
+from basic_algos.trajectory_generation.point_to_point_trajectories import third_order_polynomial_time_scaling
 
 def generate_trajectory_points(coefficients, duration, num_points=100):
     """
@@ -75,10 +75,10 @@ if __name__ == '__main__':
     start_pos = 0
     end_pos = 10
     duration = 5
-
+    max_vel = 1.0
     # Generate third-order polynomial coefficients
-    coefficients = third_order_polynomial_time_scaling(start_pos, end_pos, start_vel=0, end_vel=0.0, duration=duration)
-    print("Third Order Polynomial Coefficients (A, B, C, D):", coefficients)
+    coefficients, duration = third_order_polynomial_time_scaling(start_pos, end_pos, start_vel=0, end_vel=0.0, duration=duration, max_vel=max_vel)
+    print(f"Third Order Polynomial Coefficients (A, B, C, D): {coefficients}, Duration {duration}" )
 
     # Generate trajectory points
     trajectory_points = generate_trajectory_points(coefficients, duration)
