@@ -2,6 +2,8 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
+from utils.misc_utils import set_seed
+
 def s_curve_time_scalings(start_pos, end_pos, max_vel, max_acc, jerk):
     """
     Compute the S-curve time scaling parameters for the motion.
@@ -21,20 +23,23 @@ def s_curve_time_scalings(start_pos, end_pos, max_vel, max_acc, jerk):
     
     # Time to reach max acceleration with given jerk
     t_jerk = max_acc / jerk    
-    # Distance covered during one jerk phase
-    d_jerk = (1/6) * jerk * (t_jerk ** 3)
+    # Distance covered during one edge jerk phase
+    d_jerk_edge = (1/6) * jerk * (t_jerk ** 3)
     # Velocity at the end of the jerk phase
     v_jerk = jerk * (t_jerk ** 2) / 2
 
     # Time to reach max velocity with maximum acceleration
-    t_acc = (max_vel - v_jerk) / max_acc
+    t_acc = (max_vel - 2 * v_jerk) / max_acc
     # Distance covered during one constant acceleration phase
     d_acc = v_jerk * t_acc + 0.5 * max_acc * t_acc**2
     # Velocity at the end of the acceleration phase
     v_acc = v_jerk + max_acc * t_acc
 
+    # Distance covered during one middle jerk phase
+    d_jerk_middle = v_acc * t_jerk + 0.5 * max_acc * t_jerk**2 - (1/6) * jerk * (t_jerk ** 3)
+
     # Total distance covered during acceleration and deceleration
-    d_total_jerk = 4 * d_jerk
+    d_total_jerk = 2 * (d_jerk_edge + d_jerk_middle)
     d_total_acc = 2 * d_acc
 
     if total_distance < d_total_jerk:
@@ -51,8 +56,14 @@ def s_curve_time_scalings(start_pos, end_pos, max_vel, max_acc, jerk):
         max_vel = (total_distance - d_total_jerk) / (2 * t_jerk)
         t_acc = 0  # No constant acceleration phase
         t_constant_vel = 0
+    elif max_vel * max_vel < 4 * max_vel * jerk: 
+        # Case 3: Low Velocity - Cannot reach maximum acceleration
+        # Adjust the velocity profile to accommodate the low maximum velocity
+        t_acc = 0  # No constant acceleration phase
+        t_constant_vel = 0
+        d_constant_vel = total_distance - d_total_jerk
     else:
-        # Case 3: Full S-curve Profile - Complete Motion Profile
+        # Case 4: Full S-curve Profile - Complete Motion Profile
         d_constant_vel = total_distance - d_total_jerk - d_total_acc
         t_constant_vel = d_constant_vel / max_vel
 
@@ -66,7 +77,8 @@ def s_curve_time_scalings(start_pos, end_pos, max_vel, max_acc, jerk):
         't_acc': t_acc,
         't_constant_vel': t_constant_vel,
         't_total': t_total,
-        'd_jerk': d_jerk,
+        'd_jerk_edge': d_jerk_edge,
+        'd_jerk_middle': d_jerk_middle,
         'd_acc': d_acc,
         'd_constant_vel': d_constant_vel,
         'v_jerk': v_jerk,
@@ -96,7 +108,8 @@ def generate_s_curve_trajectory_points(params, num_points=100):
     t_jerk = params['t_jerk']
     t_acc = params['t_acc']
     t_constant_vel = params['t_constant_vel']
-    d_jerk = params['d_jerk']
+    d_jerk_edge = params['d_jerk_edge']
+    d_jerk_middle = params['d_jerk_middle']
     d_acc = params['d_acc']
     d_constant_vel = params['d_constant_vel']
     v_jerk = params['v_jerk']
@@ -120,32 +133,32 @@ def generate_s_curve_trajectory_points(params, num_points=100):
             t1 = t - t_jerk
             acc = max_acc
             vel = v_jerk + max_acc * t1
-            pos = start_pos + direction * (d_jerk + v_jerk * t1 + 0.5 * max_acc * t1**2)
+            pos = start_pos + direction * (d_jerk_edge + v_jerk * t1 + 0.5 * max_acc * t1**2)
         elif t < 2 * t_jerk + t_acc:  # Jerk-down phase
             t1 = t - t_jerk - t_acc
             acc = max_acc - jerk * t1
             vel = v_acc + max_acc * t1 - 0.5 * jerk * t1**2
-            pos = start_pos + direction * (d_jerk + d_acc + v_acc * t1 + 0.5 * max_acc * t1**2 - (1/6) * jerk * t1**3)
+            pos = start_pos + direction * (d_jerk_edge + d_acc + v_acc * t1 + 0.5 * max_acc * t1**2 - (1/6) * jerk * t1**3)
         elif t < 2 * t_jerk + t_acc + t_constant_vel:  # Constant velocity phase
             t1 = t - 2 * t_jerk - t_acc
             acc = 0
             vel = max_vel
-            pos = start_pos + direction * (2 * d_jerk + d_acc + max_vel * t1)
+            pos = start_pos + direction * (d_jerk_edge + d_acc + d_jerk_middle + max_vel * t1)
         elif t < 3 * t_jerk + t_acc + t_constant_vel:  # Negative Jerk phase
             t1 = t - 2 * t_jerk - t_acc - t_constant_vel
             acc = -jerk * t1
-            vel = max_vel - jerk * t1
-            pos = start_pos + direction * (2 * d_jerk + d_acc + d_constant_vel + max_vel * t1 - 0.5 * jerk * t1**2 - (1/6) * jerk * t1**3)
+            vel = max_vel - 0.5 * jerk * t1**2
+            pos = start_pos + direction * (d_jerk_edge + d_jerk_middle + d_acc + d_constant_vel + max_vel * t1 - (1/6) * jerk * t1**3)
         elif t < 3 * t_jerk + 2 * t_acc + t_constant_vel:  # Constant Deceleration phase
             t1 = t - 3 * t_jerk - t_acc - t_constant_vel
             acc = -max_acc
             vel = v_acc - max_acc * t1
-            pos = start_pos + direction * (3 * d_jerk + d_acc + d_constant_vel + v_acc * t1 - 0.5 * max_acc * t1**2)
+            pos = start_pos + direction * (d_jerk_edge + 2 * d_jerk_middle + d_acc + d_constant_vel + v_acc * t1 - 0.5 * max_acc * t1**2)
         elif t < 4 * t_jerk + 2 * t_acc + t_constant_vel:  # Negative Jerk-down phase
             t1 = t - 3 * t_jerk - 2 * t_acc - t_constant_vel
             acc = -max_acc + jerk * t1
             vel = v_jerk - max_acc * t1 + 0.5 * jerk * t1**2
-            pos = start_pos + direction * (3 * d_jerk + 2 * d_acc + d_constant_vel + v_jerk * t1 - 0.5 * max_acc * t1**2 + (1/6) * jerk * t1**3) 
+            pos = start_pos + direction * (d_jerk_edge + 2 * d_jerk_middle + 2 * d_acc + d_constant_vel + v_jerk * t1 - 0.5 * max_acc * t1**2 + (1/6) * jerk * t1**3) 
         else:  # Final phase
             acc = 0
             vel = 0
@@ -162,12 +175,14 @@ def generate_s_curve_trajectory_points(params, num_points=100):
         'acceleration': np.array(accelerations)
     }
 
-def plot_trajectory(trajectory_data):
+def plot_trajectory(trajectory_data, save_path=None):
+
     """
     Plot the position, velocity, and acceleration of the trajectory.
     
     Args:
         trajectory_data (dict): Contains arrays of time, position, velocity, and acceleration.
+        save_path (str, optional): Path to save the plot image. If None, the plot is not saved.
     """
     time_steps = trajectory_data['time']
     positions = trajectory_data['position']
@@ -201,9 +216,17 @@ def plot_trajectory(trajectory_data):
     plt.legend()
     
     plt.tight_layout()
+    
+    # Save the plot if a save_path is provided
+    if save_path:
+        plt.savefig(save_path)
+        print(f"Plot saved to {save_path}")
+    
     plt.show()
 
 if __name__ == '__main__':
+    set_seed()
+    log_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the current script
     # Setting parameters
     start_pos = 0
     end_pos = 10
@@ -217,5 +240,7 @@ if __name__ == '__main__':
     # Generate trajectory points
     trajectory_data = generate_s_curve_trajectory_points(params)
 
-    # Plot the trajectory
-    plot_trajectory(trajectory_data)
+    # Plot the trajectory and save it
+    save_path = os.path.join(log_dir, "s_curve_trajectory.png")
+    plot_trajectory(trajectory_data, save_path=save_path)
+
