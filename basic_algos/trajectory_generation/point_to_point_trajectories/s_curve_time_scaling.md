@@ -1,0 +1,3 @@
+**S-Curve Time Scaling**
+
+S-Curve Time Scaling provides a smoother motion profile by gradually adjusting acceleration and deceleration, resulting in an "S" shape when plotting acceleration over time. This method introduces a jerk-limited phase, reducing abrupt changes in acceleration and making the motion more fluid. This smoothness minimizes mechanical stress and vibrations, which is especially beneficial in applications like robotic arms and conveyor systems. The trade-off is a more complex calculation and slightly longer motion time compared to trapezoidal profiles, but it offers improved performance for systems that require smooth and precise control.

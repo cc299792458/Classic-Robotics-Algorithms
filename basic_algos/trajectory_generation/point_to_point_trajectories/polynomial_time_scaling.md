@@ -1,0 +1,3 @@
+**Third-Order and Fifth-Order Polynomial Time Scaling**
+
+Third-Order and Fifth-Order Polynomial Time Scaling are commonly used methods in trajectory generation for smooth motion. Third-order polynomials ensure continuous velocity and acceleration, making them suitable for scenarios where smooth transitions are needed between waypoints. Fifth-order polynomials go a step further, providing continuity in velocity, acceleration, and jerk (the derivative of acceleration), which results in even smoother motion. This is especially important in robotics and automated systems, where minimizing abrupt changes can reduce mechanical stress and improve control accuracy.

@@ -1,0 +1,3 @@
+**Polynomial Via Point Trajectories**
+
+Polynomial Via Point Trajectories allows for smooth and continuous motion through multiple waypoints by using polynomial functions. This method can handle various constraints like specified velocities and durations at each waypoint, providing flexibility in trajectory design. By fitting higher-order polynomials (e.g., third or fifth order) between consecutive waypoints, the trajectory ensures a smooth transition, minimizing abrupt changes in motion. This is particularly useful in complex robotic tasks, such as path planning, where the motion needs to be fluid and adaptable across multiple points in space.

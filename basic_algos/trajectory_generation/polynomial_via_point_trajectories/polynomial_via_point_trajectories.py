@@ -2,6 +2,8 @@ import numpy as np
 
 from basic_algos.trajectory_generation.point_to_point_trajectories import third_order_polynomial_time_scaling
 
+# TODO: Add fifth order polynomial time scaling, too.
+
 def polynomial_via_point_trajectories(waypoints, velocities=None, durations=None):
     """
     Generates polynomial trajectories for multi-dimensional waypoints.
