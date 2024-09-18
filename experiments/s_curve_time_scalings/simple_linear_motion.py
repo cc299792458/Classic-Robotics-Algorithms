@@ -3,94 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from utils.misc_utils import set_seed
-
-def s_curve_time_scalings(start_pos, end_pos, max_vel, max_acc, jerk):
-    """
-    Compute the S-curve time scaling parameters for the motion.
-
-    Args:
-        start_pos (float): Starting position.
-        end_pos (float): Ending position.
-        max_vel (float): Maximum velocity.
-        max_acc (float): Maximum acceleration.
-        jerk (float): The constant jerk (rate of change of acceleration).
-
-    Returns:
-        dict: A dictionary containing the time and distances for different phases of the S-curve profile.
-    """
-    # Calculate the total distance
-    total_distance = abs(end_pos - start_pos)
-    
-    # Time to reach max acceleration with given jerk
-    t_jerk = max_acc / jerk    
-    # Distance covered during one edge jerk phase
-    d_jerk_edge = (1/6) * jerk * (t_jerk ** 3)
-    # Velocity at the end of the jerk phase
-    v_jerk = jerk * (t_jerk ** 2) / 2
-
-    # Time to reach max velocity with maximum acceleration
-    t_acc = (max_vel - 2 * v_jerk) / max_acc
-    # Distance covered during one constant acceleration phase
-    d_acc = v_jerk * t_acc + 0.5 * max_acc * t_acc**2
-    # Velocity at the end of the acceleration phase
-    v_acc = v_jerk + max_acc * t_acc
-
-    # Distance covered during one middle jerk phase
-    d_jerk_middle = v_acc * t_jerk + 0.5 * max_acc * t_jerk**2 - (1/6) * jerk * (t_jerk ** 3)
-
-    # Total distance covered during acceleration and deceleration
-    d_total_jerk = 2 * (d_jerk_edge + d_jerk_middle)
-    d_total_acc = 2 * d_acc
-
-    if total_distance < d_total_jerk:
-        # Case 1: Very Short Distance - Adjust Max Acceleration and Velocity
-        max_acc = (6 * total_distance * jerk) ** (1/3)
-        t_jerk = max_acc / jerk
-        max_vel = jerk * (t_jerk**2) / 2  # Maximum velocity achievable in this profile
-        t_acc = 0  # No constant acceleration phase
-        d_jerk = (1/6) * jerk * (t_jerk ** 3)
-        d_total_jerk = 2 * d_jerk
-        d_acc = 0
-        d_total_acc = 0
-        t_constant_vel = 0
-    elif total_distance < d_total_jerk + d_total_acc:
-        # Case 2: Short Distance - Adjust Velocity
-        max_vel = (total_distance - d_total_jerk) / (2 * t_jerk)
-        t_acc = 0  # No constant acceleration phase
-        t_constant_vel = 0
-    elif max_vel * max_vel < 4 * max_acc * jerk: 
-        # Case 3: Low Velocity - Cannot reach maximum acceleration
-        # Adjust the velocity profile to accommodate the low maximum velocity
-        t_acc = 0  # No constant acceleration phase
-        t_constant_vel = 0
-        d_constant_vel = total_distance - d_total_jerk
-    else:
-        # Case 4: Full S-curve Profile - Complete Motion Profile
-        d_constant_vel = total_distance - d_total_jerk - d_total_acc
-        t_constant_vel = d_constant_vel / max_vel
-
-    # Compute the times for different phases
-    t_total_jerk = 4 * t_jerk
-    t_total_acc = 2 * t_acc
-    t_total = t_total_jerk + t_total_acc + t_constant_vel  # Total time including constant velocity phase
-
-    return {
-        't_jerk': t_jerk,
-        't_acc': t_acc,
-        't_constant_vel': t_constant_vel,
-        't_total': t_total,
-        'd_jerk_edge': d_jerk_edge,
-        'd_jerk_middle': d_jerk_middle,
-        'd_acc': d_acc,
-        'd_constant_vel': d_constant_vel,
-        'v_jerk': v_jerk,
-        'v_acc': v_acc,
-        'max_vel': max_vel,
-        'max_acc': max_acc,
-        'jerk': jerk,
-        'start_pos': start_pos,
-        'end_pos': end_pos
-    }
+from basic_algos.trajectory_generation.point_to_point_trajectories import s_curve_time_scalings
 
 def generate_s_curve_trajectory_points(params, num_points=100):
     """
@@ -232,7 +145,7 @@ if __name__ == '__main__':
     # Setting parameters
     start_pos = 0.0
     end_pos = 20.0
-    max_vel = 2.0
+    max_vel = 3.0
     max_acc = 1.0
     jerk = 0.5
 
