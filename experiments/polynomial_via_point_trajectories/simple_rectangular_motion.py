@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 from basic_algos.trajectory_generation.polynomial_via_point_trajectories import polynomial_via_point_trajectories
 
-def plot_multidimensional_trajectory(coefficients, durations, waypoints=None, velocities=None, num_points=100, save_path=None):
+def plot_multidimensional_trajectory(coefficients, durations, waypoints=None, velocities=None, num_points=100, save_path=None, order=3):
     """
     Plot the multi-dimensional trajectory.
 
@@ -35,17 +35,27 @@ def plot_multidimensional_trajectory(coefficients, durations, waypoints=None, ve
 
         # Compute and concatenate the trajectory segments for the current dimension
         for idx, coeffs in enumerate(dim_coeffs):
-            A, B, C, D = coeffs
+            if order == 3:
+                A, B, C, D = coeffs
+            elif order == 5:
+                A, B, C, D, E, F = coeffs
 
             # Time steps for this segment
             segment_duration = durations[idx]
             segment_time_steps = np.linspace(0, segment_duration, num_points)
 
-            # Calculate position, velocity, and acceleration for this segment
-            pos = A * segment_time_steps**3 + B * segment_time_steps**2 + C * segment_time_steps + D
-            vel = 3 * A * segment_time_steps**2 + 2 * B * segment_time_steps + C
-            acc = 6 * A * segment_time_steps + 2 * B
-
+            if order == 3:
+                # Calculate position, velocity, and acceleration for this segment
+                pos = A * segment_time_steps**3 + B * segment_time_steps**2 + C * segment_time_steps + D
+                vel = 3 * A * segment_time_steps**2 + 2 * B * segment_time_steps + C
+                acc = 6 * A * segment_time_steps + 2 * B
+            elif order == 5:
+                # Calculate position, velocity, and acceleration for quintic polynomial
+                pos = A * segment_time_steps**5 + B * segment_time_steps**4 + C * segment_time_steps**3 + D * segment_time_steps**2 + E * segment_time_steps + F
+                vel = 5 * A * segment_time_steps**4 + 4 * B * segment_time_steps**3 + 3 * C * segment_time_steps**2 + 2 * D * segment_time_steps + E
+                acc = 20 * A * segment_time_steps**3 + 12 * B * segment_time_steps**2 + 6 * C * segment_time_steps + 2 * D
+            else:
+                raise NotImplementedError
             if full_time_steps:
                 segment_time_steps += full_time_steps[-1][-1]  # Offset the time steps to align segments
             full_time_steps.append(segment_time_steps)
@@ -128,15 +138,21 @@ def plot_multidimensional_trajectory(coefficients, durations, waypoints=None, ve
         plt.show()
 
 if __name__ == '__main__':
+    order = 5
+
     # Set up the example
     waypoints = np.array([[0, 0], [0, 1], [1, 1], [1, 0]])  # Example for 2D
     velocities = np.array([[0, 0], [1, 0], [0, -1], [0, 0]])  # Initial and final velocities for each waypoint
     durations = np.array([1.0, 1.0, 1.0])
 
+    # waypoints = np.array([[1.0, 1.0], [1.0, 0.0]])  # Example for 2D
+    # velocities = np.array([[0.0, -1.0], [0.0, 0.0]])  # Initial and final velocities for each waypoint
+    # durations = np.array([1.0])
+
     # Generate coefficients for the polynomial trajectories
-    coefficients = polynomial_via_point_trajectories(waypoints, velocities, durations)
+    coefficients = polynomial_via_point_trajectories(waypoints, velocities, durations, order=order)
 
     # Plot the trajectories and save the plot
     log_dir = os.path.dirname(os.path.abspath(__file__))
     save_path = os.path.join(log_dir, '2D_rectangular_trajectory_plot.png')
-    plot_multidimensional_trajectory(coefficients, durations, waypoints=waypoints, velocities=velocities, save_path=save_path)
+    plot_multidimensional_trajectory(coefficients, durations, waypoints=waypoints, velocities=velocities, save_path=save_path, order=order)

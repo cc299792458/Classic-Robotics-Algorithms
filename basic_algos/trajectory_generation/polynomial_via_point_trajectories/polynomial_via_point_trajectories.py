@@ -1,10 +1,10 @@
 import numpy as np
 
-from basic_algos.trajectory_generation.point_to_point_trajectories import third_order_polynomial_time_scaling
+from basic_algos.trajectory_generation.point_to_point_trajectories import third_order_polynomial_time_scaling, fifth_order_polynomial_time_scaling
 
 # TODO: Add fifth order polynomial time scaling, too.
 
-def polynomial_via_point_trajectories(waypoints, velocities=None, durations=None):
+def polynomial_via_point_trajectories(waypoints, velocities=None, durations=None, order=3):
     """
     Generates polynomial trajectories for multi-dimensional waypoints.
 
@@ -41,7 +41,12 @@ def polynomial_via_point_trajectories(waypoints, velocities=None, durations=None
             duration = durations[i] if durations is not None else 1.0
 
             # Calculate the polynomial coefficients for this segment
-            coeffs, _ = third_order_polynomial_time_scaling(start_pos, end_pos, start_vel, end_vel, duration=duration)
+            if order == 3:
+                coeffs, _ = third_order_polynomial_time_scaling(start_pos, end_pos, start_vel, end_vel, duration=duration)
+            elif order == 5:
+                coeffs, _ = fifth_order_polynomial_time_scaling(start_pos, end_pos, start_vel, end_vel, duration=duration)
+            else:
+                raise NotImplementedError
             coefficients[dim].append(coeffs)
 
     return coefficients

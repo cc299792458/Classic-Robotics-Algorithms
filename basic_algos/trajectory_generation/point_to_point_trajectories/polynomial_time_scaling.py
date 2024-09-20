@@ -19,16 +19,16 @@ def third_order_polynomial_time_scaling(start_pos, end_pos, start_vel=0, end_vel
             coefficients: (A, B, C, D) Coefficients of the third-order polynomial.
             duration: Calculated time duration of the motion.
     """
-    # Calculate the total position change
-    delta_pos = np.abs(end_pos - start_pos)
+    # Calculate the total position change (retain direction)
+    delta_pos = end_pos - start_pos
     
     # If max_vel or max_acc is provided, calculate the duration
     if max_vel is not None or max_acc is not None:
         # Calculate duration based on maximum velocity if provided
-        duration_vel = 3 * delta_pos / (2 * max_vel) if max_vel is not None else 0.0
+        duration_vel = 3 * np.abs(delta_pos) / (2 * max_vel) if max_vel is not None else 0.0
         
         # Calculate duration based on maximum acceleration if provided
-        duration_acc = np.sqrt((6 * delta_pos) / max_acc) if max_acc is not None else 0.0
+        duration_acc = np.sqrt((6 * np.abs(delta_pos)) / max_acc) if max_acc is not None else 0.0
         
         # Choose the larger duration to ensure both constraints are satisfied
         duration = max(duration_vel, duration_acc, duration) if duration is not None else max(duration_vel, duration_acc)
@@ -40,6 +40,7 @@ def third_order_polynomial_time_scaling(start_pos, end_pos, start_vel=0, end_vel
     D = start_pos
 
     return (A, B, C, D), duration
+
 
 def fifth_order_polynomial_time_scaling(start_pos, end_pos, start_vel=0, end_vel=0, start_acc=0, end_acc=0, max_vel=None, max_acc=None, duration=None):
     """
@@ -62,17 +63,17 @@ def fifth_order_polynomial_time_scaling(start_pos, end_pos, start_vel=0, end_vel
             coefficients: (A, B, C, D, E, F) Coefficients of the fifth-order polynomial.
             duration: Calculated time duration of the motion.
     """
-    # Calculate the total position change
-    delta_pos = np.abs(end_pos - start_pos)
+    # Calculate the total position change (retain direction)
+    delta_pos = end_pos - start_pos
 
     # If max_vel or max_acc is provided, calculate the duration
     if max_vel is not None or max_acc is not None:
         # Estimate the duration needed to reach max velocity and acceleration
         # Peak velocity for a fifth-order polynomial is v_max = 15/8 * (delta_pos / duration)
-        duration_vel = 15 * delta_pos / (8 * max_vel) if max_vel is not None else 0.0
+        duration_vel = 15 * np.abs(delta_pos) / (8 * max_vel) if max_vel is not None else 0.0
 
         # Peak acceleration for a fifth-order polynomial is a_max = 10 * delta_pos / (T^2 * sqrt(3))
-        duration_acc = np.sqrt(10 * delta_pos / (max_acc * np.sqrt(3))) if max_acc is not None else 0.0
+        duration_acc = np.sqrt(10 * np.abs(delta_pos) / (max_acc * np.sqrt(3))) if max_acc is not None else 0.0
 
         # Choose the larger duration to ensure both constraints are satisfied
         duration = max(duration_vel, duration_acc, duration) if duration is not None else max(duration_vel, duration_acc)
@@ -86,6 +87,7 @@ def fifth_order_polynomial_time_scaling(start_pos, end_pos, start_vel=0, end_vel
     F = start_pos
 
     return (A, B, C, D, E, F), duration
+
 
 # Example usage
 if __name__ == '__main__':
