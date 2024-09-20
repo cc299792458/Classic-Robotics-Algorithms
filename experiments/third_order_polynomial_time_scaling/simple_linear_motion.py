@@ -91,7 +91,7 @@ if __name__ == '__main__':
     max_vel = 1.0
 
     # Generate third-order polynomial coefficients
-    coefficients, duration = third_order_polynomial_time_scaling(start_pos, end_pos, start_vel=0, end_vel=0.0, duration=duration, max_vel=max_vel)
+    coefficients, duration = third_order_polynomial_time_scaling(start_pos, end_pos, start_vel=0.0, end_vel=0.0, duration=duration, max_vel=max_vel)
     print(f"Third Order Polynomial Coefficients (A, B, C, D): {coefficients}, Duration {duration}")
 
     # Generate trajectory points
