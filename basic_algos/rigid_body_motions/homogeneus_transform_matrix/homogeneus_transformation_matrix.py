@@ -71,3 +71,12 @@ class HomogeneousTransformationMatrix:
         String representation of the homogeneous transformation matrix.
         """
         return f"HomogeneousTransformationMatrix(\n{self.matrix})"
+
+    def from_twist(self):
+        pass
+
+    def to_twist(self):
+        """
+        Converts a twist (6D vector) to a 4x4 homogeneous transformation matrix using the exponential map.
+        """
+        pass
