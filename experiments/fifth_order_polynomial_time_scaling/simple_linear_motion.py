@@ -86,13 +86,15 @@ if __name__ == '__main__':
     log_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the current script
     
     start_pos = 0
-    end_pos = 10
-    duration = 5
+    end_pos = 1
+    start_vel = 0
+    end_vel = 1
+    # duration = 5
     max_vel = 1.0
     max_acc = 1.0
 
     # Generate fifth-order polynomial coefficients
-    coefficients, duration = fifth_order_polynomial_time_scaling(start_pos, end_pos, start_vel=0, end_vel=0.0, max_vel=max_vel, max_acc=max_acc)
+    coefficients, duration = fifth_order_polynomial_time_scaling(start_pos, end_pos, start_vel=start_vel, end_vel=end_vel, max_vel=max_vel, max_acc=max_acc)
     print(f"Fifth Order Polynomial Coefficients (A, B, C, D, E, F): {coefficients}, Duration {duration}")
 
     # Generate trajectory points
