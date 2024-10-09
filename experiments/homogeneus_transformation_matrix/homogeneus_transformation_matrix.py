@@ -13,15 +13,15 @@ if __name__ == '__main__':
     # 1. Representing the pose of frame A, B, and C relative to frame A
     T_aa = HomogeneousTransformationMatrix()  # Identity matrix: frame A relative to itself (no translation or rotation)
     
-    T_ab = HomogeneousTransformationMatrix(R=RotationMatrix([[0.0, -1.0, 0.0],  # Rotation matrix representing frame B relative to frame A
-                                                            [1.0, 0.0, 0.0],
-                                                            [0.0, 0.0, 1.0]]),
-                                           p=np.array([1.0, 2.0, 0.0]))  # Translation from frame A to frame B
-    
-    T_ac = HomogeneousTransformationMatrix(R=RotationMatrix([[0.0, -1.0, 0.0],  # Rotation matrix representing frame C relative to frame A
-                                                            [0.0, 0.0, -1.0],
+    T_ab = HomogeneousTransformationMatrix(R=RotationMatrix([[0.0, 0.0, 1.0],  # Rotation matrix representing frame B relative to frame A
+                                                            [0.0, -1.0, 0.0],
                                                             [1.0, 0.0, 0.0]]),
-                                           p=np.array([3.0, 0.0, 1.0]))  # Translation from frame A to frame C
+                                           p=np.array([0.0, -2.0, 0.0]))  # Translation from frame A to frame B
+    
+    T_ac = HomogeneousTransformationMatrix(R=RotationMatrix([[-1.0, 0.0, 0.0],  # Rotation matrix representing frame C relative to frame A
+                                                            [0.0, 0.0, 1.0],
+                                                            [0.0, 1.0, 0.0]]),
+                                           p=np.array([-1.0, 1.0, 0.0]))  # Translation from frame A to frame C
     
     # Define a point in frame A
     p_a = np.array([1.0, 1.0, 0.0])  # Point representation in frame A (x, y, z)
@@ -37,18 +37,17 @@ if __name__ == '__main__':
     p_b = T_ba * p_a  # Transform point from frame A to frame B
     
     # 3. Rotating and translating a frame within its original reference frame
-    # Define a 90-degree rotation about the X-axis with a translation
-    theta = np.pi / 2
-    T_x_90 = HomogeneousTransformationMatrix(R=RotationMatrix([[1.0, 0.0, 0.0],  # Rotation matrix for 90 degrees about X-axis
-                                                       [0.0, np.cos(theta), -np.sin(theta)],
-                                                       [0.0, np.sin(theta), np.cos(theta)]]),
-                                             p=np.array([1.0, 0.0, 0.0]))  # Translation along X-axis
+    # Define a transformation matrix
+    T = HomogeneousTransformationMatrix(R=RotationMatrix([[0.0, -1.0, 0.0],
+                                                        [1.0, 0.0, 0.0],
+                                                        [0.0, 0.0, 1.0]]),
+                                        p=np.array([0.0, 2.0, 0.0]))
     
     # Rotate and translate frame B, where the rotation is expressed in frame A's reference frame
-    T_ab1 = T_x_90 * T_ab  # Rotate and translate frame B using a 90-degree rotation about X in frame A
+    T_ab1 = T * T_ab  # Rotate and translate frame B in frame A
     
     # Rotate and translate frame B, where the rotation is expressed in frame B's own reference frame
-    T_ab2 = T_ab * T_x_90  # Translate and rotate frame B in its own reference frame (B's local transformation)
+    T_ab2 = T_ab * T  # Translate and rotate frame B in its own reference frame (B's local transformation)
     
     # Output results
     print("Original transformation matrix T_ab (representing frame B relative to frame A):\n", T_ab)

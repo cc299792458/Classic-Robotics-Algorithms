@@ -68,7 +68,7 @@ class HomogeneousTransformationMatrix:
         """
         String representation of the homogeneous transformation matrix.
         """
-        return f"HomogeneousTransformationMatrix(\n{self.matrix})"
+        return f"{self.matrix})"
 
     def from_twist(self):
         pass
