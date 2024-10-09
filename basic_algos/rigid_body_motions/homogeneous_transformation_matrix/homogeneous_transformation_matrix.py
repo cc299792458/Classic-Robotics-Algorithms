@@ -34,10 +34,8 @@ class HomogeneousTransformationMatrix:
         """
         R_inv = self.matrix[:3, :3].T  # Rotation part transpose
         p_inv = -np.dot(R_inv, self.matrix[:3, 3])  # Inverse of the translation part
-        inv_matrix = np.eye(4)
-        inv_matrix[:3, :3] = R_inv
-        inv_matrix[:3, 3] = p_inv
-        return inv_matrix
+
+        return HomogeneousTransformationMatrix(R=RotationMatrix(R_inv), p=p_inv)
 
     def __mul__(self, other):
         """
@@ -48,7 +46,7 @@ class HomogeneousTransformationMatrix:
         if isinstance(other, HomogeneousTransformationMatrix):
             # Matrix multiplication of two homogeneous transformation matrices
             result_matrix = np.dot(self.matrix, other.matrix)
-            return HomogeneousTransformationMatrix(result_matrix[:3, :3], result_matrix[:3, 3])
+            return HomogeneousTransformationMatrix(RotationMatrix(result_matrix[:3, :3]), result_matrix[:3, 3])
         elif isinstance(other, np.ndarray) and other.shape == (3,):
             # Transform the 3D point (apply transformation to vector)
             point_homogeneous = np.append(other, 1)  # Convert point to homogeneous coordinates
