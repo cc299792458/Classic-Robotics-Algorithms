@@ -1,8 +1,8 @@
 """
-In this experiment, we demonstrate that the rotation matrix has three main uses:
-1. Representing an orientation.
-2. Changing the reference frame in which a vector or a frame is represented.
-3. Rotating a vector or a frame within its original reference frame.
+    In this experiment, we demonstrate that the rotation matrix has three main uses:
+    1. Representing an orientation.
+    2. Changing the reference frame in which a vector or a frame is represented.
+    3. Rotating a vector or a frame within its original reference frame.
 """
 
 import numpy as np
