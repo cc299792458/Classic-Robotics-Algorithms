@@ -9,14 +9,14 @@ class RotationMatrix:
             self.matrix = np.eye(3)  # Default to identity matrix
         else:
             self.matrix = np.array(matrix)
-            assert self._is_valid_rotation_matrix()
+            assert self._is_valid_rotation_matrix(), "Not a valid rotation matrix."
 
     def _is_valid_rotation_matrix(self):
         """
         Check if the matrix is a valid rotation matrix.
         A valid rotation matrix is orthogonal and has a determinant of +1.
         """
-        Rt = self.transpose().matrix
+        Rt = self.matrix.T
         shouldBeIdentity = np.dot(Rt, self.matrix)
         I = np.eye(3)
         return np.allclose(shouldBeIdentity, I) and np.isclose(np.linalg.det(self.matrix), 1.0)
@@ -35,12 +35,6 @@ class RotationMatrix:
         """
         return self.transpose()
 
-    def from_euler(self, roll, pitch, yaw):
-        """
-        Generate a rotation matrix from roll, pitch, and yaw (Euler angles).
-        """
-        pass
-
     def from_axis_angle(self, axis, angle):
         """
         Generate a rotation matrix from an axis and an angle.
@@ -53,9 +47,15 @@ class RotationMatrix:
         """
         pass
 
-    def to_euler(self):
+    def from_euler(self, roll, pitch, yaw):
         """
-        Convert the rotation matrix to Euler angles.
+        Generate a rotation matrix from roll, pitch, and yaw (Euler angles).
+        """
+        pass
+
+    def to_axis_angle(self):
+        """
+        Convert the rotation matrix to an axis and an angle.
         """
         pass
 
@@ -65,9 +65,9 @@ class RotationMatrix:
         """
         pass
 
-    def to_axis_angle(self):
+    def to_euler(self):
         """
-        Convert the rotation matrix to an axis and an angle.
+        Convert the rotation matrix to Euler angles.
         """
         pass
 
@@ -98,4 +98,4 @@ class RotationMatrix:
         """
         String representation of the rotation matrix.
         """
-        return f"RotationMatrix({self.matrix})"
+        return f"{self.matrix}"
