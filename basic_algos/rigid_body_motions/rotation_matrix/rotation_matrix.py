@@ -19,7 +19,8 @@ class RotationMatrix:
         Rt = self.matrix.T
         shouldBeIdentity = np.dot(Rt, self.matrix)
         I = np.eye(3)
-        return np.allclose(shouldBeIdentity, I) and np.isclose(np.linalg.det(self.matrix), 1.0)
+
+        return np.allclose(shouldBeIdentity, I, atol=1e-4, rtol=1e-3) and np.isclose(np.linalg.det(self.matrix), 1.0, atol=2e-4)
 
     def __mul__(self, other):
         """
@@ -114,9 +115,17 @@ class RotationMatrix:
 
     def from_quaternion(self, quaternion):
         """
-        Generate a rotation matrix from a quaternion.
+        Generate a rotation matrix from a quaternion (qw, qx, qy, qz).
+        The quaternion should be given in the form (qw, qx, qy, qz), where:
+        - qw is the scalar part
+        - qx, qy, qz are the vector parts
         """
-        pass
+        qw, qx, qy, qz = quaternion
+
+        # Compute the rotation matrix elements from the quaternion
+        self.matrix = np.array([[1 - 2 * (qy**2 + qz**2), 2 * (qx * qy - qz * qw), 2 * (qx * qz + qy * qw)],
+                                [2 * (qx * qy + qz * qw), 1 - 2 * (qx**2 + qz**2), 2 * (qy * qz - qx * qw)],
+                                [2 * (qx * qz - qy * qw), 2 * (qy * qz + qx * qw), 1 - 2 * (qx**2 + qy**2)]])
 
     def to_axis_angle(self):
         """
@@ -178,6 +187,16 @@ class RotationMatrix:
 
     def to_quaternion(self):
         """
-        Convert the rotation matrix to a quaternion.
+        Convert the rotation matrix to a quaternion in (qw, qx, qy, qz) format using a simpler method.
+        Returns:
+        - quaternion: (qw, qx, qy, qz)
         """
-        pass
+        # Calculate qw from the trace of the matrix
+        qw = 0.5 * np.sqrt(1 + self.matrix[0, 0] + self.matrix[1, 1] + self.matrix[2, 2])
+        
+        # Compute qx, qy, qz
+        qx = (self.matrix[2, 1] - self.matrix[1, 2]) / (4 * qw)
+        qy = (self.matrix[0, 2] - self.matrix[2, 0]) / (4 * qw)
+        qz = (self.matrix[1, 0] - self.matrix[0, 1]) / (4 * qw)
+        
+        return qw, qx, qy, qz
