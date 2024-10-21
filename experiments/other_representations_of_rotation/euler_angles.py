@@ -5,6 +5,8 @@ and show the convenience of visualizing rotation using Euler angles.
 
 import numpy as np
 import matplotlib.pyplot as plt
+
+from utils.misc_utils import set_seed
 from basic_algos.rigid_body_motions.rotation_matrix import RotationMatrix
 
 def plot_axes(ax, R, label=""):
@@ -25,6 +27,7 @@ def plot_axes(ax, R, label=""):
     ax.set_zlim([-1, 1])
 
 if __name__ == '__main__':
+    set_seed()
     # 1. Define Euler angles (ZYX order: yaw, pitch, roll)
     original_yaw = np.pi / 2  # 90 degrees
     original_pitch = np.pi / 2  # 90 degrees

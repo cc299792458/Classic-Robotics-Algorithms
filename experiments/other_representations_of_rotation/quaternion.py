@@ -5,6 +5,8 @@ and finally convert the Euler angles back to a rotation matrix and to a quaterni
 
 import numpy as np
 import matplotlib.pyplot as plt
+
+from utils.misc_utils import set_seed
 from basic_algos.rigid_body_motions.rotation_matrix import RotationMatrix
 
 def plot_axes(ax, R, label=""):
@@ -25,6 +27,7 @@ def plot_axes(ax, R, label=""):
     ax.set_zlim([-1, 1])
 
 if __name__ == '__main__':
+    set_seed()
     # 1. Define quaternions for 90-degree rotations around Z, Y, and X axes
     qz = [0.7071, 0.0, 0.0, 0.7071]  # 90-degree rotation around Z axis
     qy = [0.7071, 0.0, 0.7071, 0.0]  # 90-degree rotation around Y axis

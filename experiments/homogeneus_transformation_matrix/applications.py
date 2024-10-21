@@ -6,10 +6,13 @@ In this experiment, we demonstrate that the homogeneous transformation matrix ha
 """
 
 import numpy as np
+
+from utils.misc_utils import set_seed
 from basic_algos.rigid_body_motions.rotation_matrix import RotationMatrix
 from basic_algos.rigid_body_motions.homogeneous_transformation_matrix import HomogeneousTransformationMatrix
 
 if __name__ == '__main__':
+    set_seed()
     # 1. Representing the pose of frame A, B, and C relative to frame A
     T_aa = HomogeneousTransformationMatrix()  # Identity matrix: frame A relative to itself (no translation or rotation)
     
