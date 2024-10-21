@@ -15,6 +15,8 @@ from basic_algos.forward_kinematics.product_of_exponentials_formula import (
     forward_kinematics_in_body
 )
 
+# TODO: Also draw the coordinate of the end effector on the plot
+
 def plot_robot_arm(base_pos, link1_end, link2_end, log_dir):
     """
     Visualizes the robotic arm in the XY plane and annotates the end-effector position.
@@ -51,7 +53,7 @@ def plot_robot_arm(base_pos, link1_end, link2_end, log_dir):
     plt.title('2-Joint Manipulator in XY Plane')
 
     # Save the figure
-    plt.savefig(os.path.join(log_dir, "forward_kinematics_of_a_simple_2_links_robot_arm.png"))
+    plt.savefig(os.path.join(log_dir, "forward_kinematics_of_a_simple_2_link_robot_arm.png"))
 
     # Show the plot
     plt.show()
