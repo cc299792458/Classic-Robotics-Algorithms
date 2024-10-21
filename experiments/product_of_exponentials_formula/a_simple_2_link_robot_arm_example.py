@@ -17,7 +17,7 @@ from basic_algos.forward_kinematics.product_of_exponentials_formula import (
 
 def plot_robot_arm(base_pos, link1_end, link2_end, log_dir):
     """
-    Visualizes the robotic arm in the XY plane.
+    Visualizes the robotic arm in the XY plane and annotates the end-effector position.
     
     Parameters:
     - base_pos: The position of the base of the robot.
@@ -35,6 +35,13 @@ def plot_robot_arm(base_pos, link1_end, link2_end, log_dir):
     ax.plot(link1_end[0], link1_end[1], 'bo', markersize=10, label='Joint 1')
     ax.plot(link2_end[0], link2_end[1], 'ro', markersize=10, label='End Effector')
 
+    # Annotate the end-effector position
+    ax.annotate(f"End Effector ({link2_end[0]:.2f}, {link2_end[1]:.2f})", 
+                xy=(link2_end[0], link2_end[1]), 
+                xytext=(link2_end[0] + 0.1, link2_end[1] + 0.1),
+                arrowprops=dict(facecolor='black', shrink=0.05),
+                fontsize=10, color='red')
+
     # Set up the plot
     ax.set_xlabel('X Position (m)')
     ax.set_ylabel('Y Position (m)')
@@ -43,7 +50,10 @@ def plot_robot_arm(base_pos, link1_end, link2_end, log_dir):
     ax.legend()
     plt.title('2-Joint Manipulator in XY Plane')
 
+    # Save the figure
+    plt.savefig(os.path.join(log_dir, "forward_kinematics_of_a_simple_2_links_robot_arm.png"))
 
+    # Show the plot
     plt.show()
 
 if __name__ == "__main__":
@@ -70,7 +80,23 @@ if __name__ == "__main__":
         [0, 0, 0, 1]
     ])
 
-    # Forward kinematics in space frame
+    # Calculate Link 1 End Position using Forward Kinematics
+    # Home configuration of the end of Link 1 (zero position)
+    M_link1 = np.array([
+        [1, 0, 0, L1],  # Link 1 extends along the x-axis by length L1
+        [0, 1, 0,   0],
+        [0, 0, 1,   0],
+        [0, 0, 0,   1]
+    ])
+
+    # Forward kinematics of link 1 in space frame
+    T_link1_space = forward_kinematics_in_space(M_link1, [S1_space], [theta1])
+
+    # Extract the position of the end of Link 1
+    link1_end = T_link1_space[:2, 3]
+    print("Link 1 End Position (x, y):", link1_end)
+
+    # Forward kinematics of end effector in space frame
     T_end_effector_space = forward_kinematics_in_space(M, screws_space, thetas)
     print("End Effector Transformation Matrix (Space Frame):\n", T_end_effector_space)
 
@@ -95,7 +121,7 @@ if __name__ == "__main__":
     S2_body = compute_screw_axis(p2_body, np.array([0, 0, 1]))  # Joint 2 screw axis in body frame
     screws_body = [S1_body, S2_body]  # List of joint screw axes in body frame
 
-    # Forward kinematics in body frame using corrected screw axes and reversed multiplication
+    # Forward kinematics of end effector in body frame using corrected screw axes
     T_end_effector_body = forward_kinematics_in_body(M, screws_body, thetas)
     print("End Effector Transformation Matrix (Body Frame):\n", T_end_effector_body)
 
@@ -104,9 +130,6 @@ if __name__ == "__main__":
     print("End Effector Position (Body Frame) (x, y):", end_effector_pos_body)
 
     # Visualization
-    # Link 1 endpoint is the transformation after applying theta1
-    link1_end = np.array([L1 * np.cos(theta1), L1 * np.sin(theta1)])
-
     # End effector position is calculated from the space frame result
     end_effector_pos = end_effector_pos_space
 
