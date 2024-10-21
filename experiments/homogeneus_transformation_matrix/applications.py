@@ -3,6 +3,9 @@ In this experiment, we demonstrate that the homogeneous transformation matrix ha
 1. Representing a rigid body's pose (position and orientation).
 2. Changing the reference frame in which a vector or frame is represented.
 3. Rotating and translating a vector or a frame within its original reference frame.
+
+We also perform an additional experiment to demonstrate the transformations between a homogeneous transformation matrix (SE(3)), 
+its corresponding se(3) matrix, and a twist vector.
 """
 
 import numpy as np
@@ -58,3 +61,23 @@ if __name__ == '__main__':
     print("Transformed point in frame B (from frame A):\n", p_b)
     print("T_ab after first transformation (T_ab1), transforming B in frame A:\n", T_ab1)
     print("T_ab after second transformation (T_ab2), transforming B in its own frame:\n", T_ab2)
+
+
+    # -------- Additional Part: se3mat and twist demonstration --------
+    # Define a simple twist: [angular velocity (omega_x, omega_y, omega_z), linear velocity (v_x, v_y, v_z)]
+    twist = np.array([0.0, 0.0, np.pi / 2, 0.0, 1.0, 0.0])  # A simple 90-degree rotation around z-axis and translation along y-axis
+    
+    # Convert twist to SE(3) using from_twist
+    T_twist = HomogeneousTransformationMatrix()
+    T_twist.from_twist(twist)
+
+    # Output SE(3) matrix from the twist
+    print("\nSE(3) Matrix from Twist (90-degree rotation around z-axis + translation along y-axis):\n", T_twist.matrix)
+
+    # Convert SE(3) matrix back to se(3) matrix
+    se3mat = T_twist.to_se3mat()
+    print("\nse(3) Matrix (logarithmic map of SE(3)):\n", se3mat)
+
+    # Convert SE(3) back to twist and print the result
+    recovered_twist = T_twist.to_twist()
+    print("\nRecovered Twist Vector from SE(3):\n", recovered_twist)

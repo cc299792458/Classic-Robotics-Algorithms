@@ -1,5 +1,6 @@
 import numpy as np
 
+from scipy.linalg import expm, logm
 from basic_algos.rigid_body_motions.rotation_matrix import RotationMatrix
 
 class HomogeneousTransformationMatrix:
@@ -36,6 +37,27 @@ class HomogeneousTransformationMatrix:
         p_inv = -np.dot(R_inv, self.matrix[:3, 3])  # Inverse of the translation part
 
         return HomogeneousTransformationMatrix(R=RotationMatrix(R_inv), p=p_inv)
+    
+    def adjoint(self):
+        """
+        Computes the 6 by 6 adjoint representation [AdT] of the homogeneous transformation matrix T.
+        The adjoint matrix is used to transform twists and wrenches between frames.
+        """
+        R = self.matrix[:3, :3]  # Rotation matrix
+        p = self.matrix[:3, 3]   # Translation vector
+        # Compute p_hat, the skew-symmetric matrix of p
+        p_hat = np.array([
+            [0, -p[2], p[1]],
+            [p[2], 0, -p[0]],
+            [-p[1], p[0], 0]
+        ])
+        # Build the 6x6 adjoint matrix
+        adjoint_matrix = np.zeros((6, 6))
+        adjoint_matrix[:3, :3] = R
+        adjoint_matrix[3:, 3:] = R
+        adjoint_matrix[3:, :3] = p_hat @ R  # p_hat * R for the translational part
+
+        return adjoint_matrix
 
     def __mul__(self, other):
         """
@@ -68,13 +90,60 @@ class HomogeneousTransformationMatrix:
         """
         String representation of the homogeneous transformation matrix.
         """
-        return f"{self.matrix})"
+        return f"{self.matrix}"
 
-    def from_twist(self):
-        pass
+    def from_se3mat(self, se3mat):
+        """
+        Convert from a se(3) matrix to a homogeneous transformation matrix (SE(3)).
+        se3mat: 4x4 se(3) matrix (with skew-symmetric omega_hat and v)
+        """
+        assert se3mat.shape == (4, 4), "se(3) matrix must be 4x4."
+        self.matrix = expm(se3mat)  # Exponential map to get SE(3)
+        return self
 
+    def from_twist(self, twist):
+        """
+        Convert from a 6D twist vector to a SE(3) matrix.
+        twist: [omega_x, omega_y, omega_z, v_x, v_y, v_z]
+        """
+        omega = twist[:3]  # Angular velocity
+        v = twist[3:]      # Linear velocity
+        
+        # Skew-symmetric matrix for angular velocity (omega_hat)
+        omega_hat = np.array([
+            [0, -omega[2], omega[1]],
+            [omega[2], 0, -omega[0]],
+            [-omega[1], omega[0], 0]
+        ])
+        
+        # Construct the se(3) matrix
+        se3_matrix = np.zeros((4, 4))
+        se3_matrix[:3, :3] = omega_hat
+        se3_matrix[:3, 3] = v
+        
+        # Convert to SE(3) using from_se3mat
+        return self.from_se3mat(se3_matrix)
+    
+    def to_se3mat(self):
+        """
+        Convert the homogeneous transformation matrix (SE(3)) to a se(3) matrix.
+        Returns a 4x4 se(3) matrix.
+        """
+        return logm(self.matrix)  # Logarithmic map to get se(3)
+    
     def to_twist(self):
         """
-        Converts a twist (6D vector) to a 4x4 homogeneous transformation matrix using the exponential map.
+        Convert the SE(3) matrix back to a 6D twist vector.
+        Returns: [omega_x, omega_y, omega_z, v_x, v_y, v_z]
         """
-        pass
+        se3_matrix = self.to_se3mat()  # Convert SE(3) to se(3)
+        
+        # Extract angular velocity (omega_hat) and linear velocity (v)
+        omega_hat = se3_matrix[:3, :3]
+        v = se3_matrix[:3, 3]
+        
+        # Extract angular velocity from omega_hat
+        omega = np.array([omega_hat[2, 1], omega_hat[0, 2], omega_hat[1, 0]])
+        
+        # Return combined twist vector [omega_x, omega_y, omega_z, v_x, v_y, v_z]
+        return np.hstack([omega, v])
