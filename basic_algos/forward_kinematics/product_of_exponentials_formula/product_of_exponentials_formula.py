@@ -59,9 +59,9 @@ def forward_kinematics_in_body(M, screws, thetas):
     - The transformation matrix of the end-effector.
     """
     T = M  # Start with the home position of the end-effector
+    # Reverse the order for body frame computation
     for i in range(len(screws)):
         # Construct the se(3) twist matrix and compute the matrix exponential
         screw_twist = screw_twist_matrix(screws[i])
-        T = T @ expm(screw_twist * thetas[i])  # Directly use expm to compute matrix exponential
-    
+        T = T @ expm(screw_twist * thetas[i])
     return T
