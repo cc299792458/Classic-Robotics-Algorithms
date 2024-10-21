@@ -91,16 +91,30 @@ class RotationMatrix:
         # Rodrigues' rotation formula
         self.matrix = I + np.sin(angle) * axis_hat + (1 - np.cos(angle)) * np.dot(axis_hat, axis_hat)
 
+    def from_euler(self, roll, pitch, yaw):
+        """
+        Generate a rotation matrix from roll, pitch, and yaw (Euler angles).
+        Generate a rotation matrix from roll, pitch, and yaw (Euler angles).
+        The angles are assumed to be in ZYX order: yaw (Z), pitch (Y), roll (X).
+        """
+        # Compute rotation matrices around each axis
+        Rz = np.array([[np.cos(yaw), -np.sin(yaw), 0],
+                       [np.sin(yaw),  np.cos(yaw), 0],
+                       [0,            0,           1]])
+
+        Ry = np.array([[np.cos(pitch), 0, np.sin(pitch)],
+                       [0,             1, 0],
+                       [-np.sin(pitch), 0, np.cos(pitch)]])
+
+        Rx = np.array([[1, 0,             0],
+                       [0, np.cos(roll), -np.sin(roll)],
+                       [0, np.sin(roll),  np.cos(roll)]])
+        
+        self.matrix = np.dot(np.dot(Rz, Ry), Rx)
 
     def from_quaternion(self, quaternion):
         """
         Generate a rotation matrix from a quaternion.
-        """
-        pass
-
-    def from_euler(self, roll, pitch, yaw):
-        """
-        Generate a rotation matrix from roll, pitch, and yaw (Euler angles).
         """
         pass
 
@@ -138,14 +152,32 @@ class RotationMatrix:
 
         return axis, angle
 
+    def to_euler(self):
+        """
+        Convert the rotation matrix to Euler angles (ZYX order).
+        Returns:
+        - roll: rotation around X-axis
+        - pitch: rotation around Y-axis
+        - yaw: rotation around Z-axis
+        """
+        # Check for gimbal lock (singularity when pitch is ±90 degrees)
+        if np.isclose(self.matrix[2, 0], -1.0):
+            pitch = np.pi / 2
+            yaw = 0
+            roll = np.arctan2(self.matrix[0, 1], self.matrix[0, 2])
+        elif np.isclose(self.matrix[2, 0], 1.0):
+            pitch = -np.pi / 2
+            yaw = 0
+            roll = -np.arctan2(self.matrix[0, 1], self.matrix[0, 2])
+        else:
+            pitch = -np.arcsin(self.matrix[2, 0])
+            roll = np.arctan2(self.matrix[2, 1] / np.cos(pitch), self.matrix[2, 2] / np.cos(pitch))
+            yaw = np.arctan2(self.matrix[1, 0] / np.cos(pitch), self.matrix[0, 0] / np.cos(pitch))
+
+        return roll, pitch, yaw
+
     def to_quaternion(self):
         """
         Convert the rotation matrix to a quaternion.
-        """
-        pass
-
-    def to_euler(self):
-        """
-        Convert the rotation matrix to Euler angles.
         """
         pass
