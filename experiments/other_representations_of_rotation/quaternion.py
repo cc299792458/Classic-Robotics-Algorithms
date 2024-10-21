@@ -3,6 +3,7 @@ In this experiment, we start with a quaternion, convert it to a rotation matrix,
 and finally convert the Euler angles back to a rotation matrix and to a quaternion, comparing the final quaternion with the original.
 """
 
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -28,6 +29,7 @@ def plot_axes(ax, R, label=""):
 
 if __name__ == '__main__':
     set_seed()
+    log_dir = os.path.dirname(os.path.abspath(__file__))
     # 1. Define quaternions for 90-degree rotations around Z, Y, and X axes
     qz = [0.7071, 0.0, 0.0, 0.7071]  # 90-degree rotation around Z axis
     qy = [0.7071, 0.0, 0.7071, 0.0]  # 90-degree rotation around Y axis
@@ -98,6 +100,11 @@ if __name__ == '__main__':
     ax4.set_xlabel('X')
     ax4.set_ylabel('Y')
     ax4.set_zlabel('Z')
+
+    # Add a title to the entire figure
+    plt.suptitle('Quaternion Rotation Visualization: ZYX 90-degree Rotations', fontsize=16)
+
+    plt.savefig(os.path.join(log_dir, 'quaternion_rotation_visualization.png'))
 
     plt.show()
 

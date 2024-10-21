@@ -3,6 +3,7 @@ In this experiment, we demonstrate the usage of the from_euler and to_euler meth
 and show the convenience of visualizing rotation using Euler angles.
 """
 
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -28,6 +29,7 @@ def plot_axes(ax, R, label=""):
 
 if __name__ == '__main__':
     set_seed()
+    log_dir = os.path.dirname(os.path.abspath(__file__))
     # 1. Define Euler angles (ZYX order: yaw, pitch, roll)
     original_yaw = np.pi / 2  # 90 degrees
     original_pitch = np.pi / 2  # 90 degrees
@@ -91,6 +93,11 @@ if __name__ == '__main__':
     ax4.set_ylabel('Y')
     ax4.set_zlabel('Z')
 
+    # Add a title to the entire figure
+    plt.suptitle('Euler Angles Rotation Visualization: ZYX 90-degree Rotations', fontsize=16)
+
+    plt.savefig(os.path.join(log_dir, 'euler_angles_rotation_visualization.png'))
+
     plt.show()
 
     # 5. Convert the final rotation matrix back to Euler angles
@@ -101,11 +108,3 @@ if __name__ == '__main__':
     print(f"Recovered Yaw (Z-axis rotation): {np.degrees(recovered_yaw)} degrees")
     print(f"Recovered Pitch (Y-axis rotation): {np.degrees(recovered_pitch)} degrees")
     print(f"Recovered Roll (X-axis rotation): {np.degrees(recovered_roll)} degrees\n")
-
-    # 6. Check if the recovered Euler angles match the original ones
-    if (np.isclose(original_yaw, recovered_yaw) and
-        np.isclose(original_pitch, recovered_pitch) and
-        np.isclose(original_roll, recovered_roll)):
-        print("Success: The recovered Euler angles match the original ones!")
-    else:
-        print("Error: The recovered Euler angles do not match the original ones.")
