@@ -11,19 +11,18 @@ class RRT:
         self.tree = [tuple(self.start)]  # Initialize tree with the start node
         self.parent = {tuple(self.start): None}  # Track parents to reconstruct path
         self.all_edges = []  # To store all edges for visualization
+        self.num_nodes = 1  # Start with the initial node
 
     def sample(self):
         """Randomly sample a point in space, biased towards the goal with some probability."""
         if np.random.rand() > self.goal_sample_rate:
             return tuple(np.random.rand(2) * 100)  # Random point in the space (adjust range as needed)
-
         return tuple(self.goal)  # Sample the goal with some probability
 
     def nearest(self, point):
         """Find the nearest node in the tree to the sampled point."""
         distances = [np.linalg.norm(np.array(node) - point) for node in self.tree]
         nearest_idx = np.argmin(distances)
-
         return np.array(self.tree[nearest_idx])
 
     def local_planner(self, x_nearest, x_sample):
@@ -49,11 +48,11 @@ class RRT:
             x_sample = self.sample()
             x_nearest = self.nearest(np.array(x_sample))
             x_new = self.local_planner(x_nearest, np.array(x_sample))
-
             if self.obstacle_free(x_nearest, x_new):  # Check for collision-free motion
                 self.tree.append(x_new)
                 self.parent[x_new] = tuple(x_nearest)
                 self.all_edges.append((x_nearest, x_new))  # Store the edge for tree visualization
+                self.num_nodes += 1  # Increment node count
 
                 # Check if we've reached the goal region
                 if np.linalg.norm(np.array(x_new) - self.goal) < self.delta_distance:
