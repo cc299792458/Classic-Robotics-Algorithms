@@ -25,9 +25,28 @@ class KinodynamicRRT:
         vy = np.random.uniform(*self.sampling_range[3])
         return np.array([x, y, vx, vy])
 
-    def nearest(self, tree, state):
-        """Find the nearest state in the tree to the given state."""
-        distances = [np.linalg.norm(node[:2] - state[:2]) for node in tree]
+    def nearest(self, tree, state, position_weight=1.0, velocity_weight=1.0):
+        """
+        Find the nearest state in the tree to the given state.
+        The distance is computed with weighted and normalized position and velocity differences.
+        
+        :param tree: The current set of nodes (states) in the tree.
+        :param state: The state for which we are finding the nearest neighbor.
+        :param position_weight: Weight for the position difference.
+        :param velocity_weight: Weight for the velocity difference.
+        :return: The nearest state in the tree.
+        """
+        # Get the ranges for normalization
+        x_range = self.sampling_range[0][1] - self.sampling_range[0][0]
+        y_range = self.sampling_range[1][1] - self.sampling_range[1][0]
+        vx_range = self.sampling_range[2][1] - self.sampling_range[2][0]
+        vy_range = self.sampling_range[3][1] - self.sampling_range[3][0]
+
+        distances = [
+            position_weight * (np.linalg.norm((node[:2] - state[:2]) / np.array([x_range, y_range]))) +
+            velocity_weight * (np.linalg.norm((node[2:] - state[2:]) / np.array([vx_range, vy_range])))
+            for node in tree
+        ]
         nearest_idx = np.argmin(distances)
         return tree[nearest_idx]
 
