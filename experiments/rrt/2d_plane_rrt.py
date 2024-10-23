@@ -25,10 +25,19 @@ if __name__ == '__main__':
     # Start, goal, and create RRT object with the obstacle check function
     start = [10, 10]
     goal = [100, 100]
-    rrt_with_obstacles = RRT(start=start, goal=goal, obstacle_free=obstacle_check, max_iters=1000, delta_distance=5, goal_sample_rate=0.1)
+    sampling_range = (100, 100)
+    rrt = RRT(
+        start=start, 
+        goal=goal, 
+        obstacle_free=obstacle_check, 
+        max_iters=1000, 
+        delta_distance=5, 
+        goal_sample_rate=0.1, 
+        sampling_range=sampling_range
+    )
 
     # Run the RRT algorithm with obstacles
-    path_with_obstacles = rrt_with_obstacles.plan()
+    path = rrt.plan()
 
     # Visualization of the search tree, final path, and obstacles
     plt.figure(figsize=(6, 6))
@@ -38,21 +47,21 @@ if __name__ == '__main__':
         plt.gca().add_patch(plt.Rectangle((ox, oy), width, height, color='gray', alpha=0.5))
 
     # Plot all the search tree edges
-    for edge in rrt_with_obstacles.all_edges:
+    for edge in rrt.all_edges:
         p1, p2 = edge
         plt.plot([p1[0], p2[0]], [p1[1], p2[1]], 'y-', alpha=0.5)  # Yellow lines for search tree
 
     # If a path is found, plot it
-    if path_with_obstacles is not None and len(path_with_obstacles) > 0:
-        path_with_obstacles = np.array(path_with_obstacles)
-        plt.plot(path_with_obstacles[:, 0], path_with_obstacles[:, 1], 'b-', label='Path')  # Plot the final path in blue
+    if path is not None and len(path) > 0:
+        path = np.array(path)
+        plt.plot(path[:, 0], path[:, 1], 'b-', label='Path')  # Plot the final path in blue
 
     # Plot start and goal points
     plt.scatter(start[0], start[1], color='g', label='Start')  # Plot the start point
     plt.scatter(goal[0], goal[1], color='r', label='Goal')  # Plot the goal point
 
     # Add text to indicate the number of expanded nodes in the top-right corner
-    plt.text(105, 105, f'Nodes expanded: {rrt_with_obstacles.num_nodes}', fontsize=12, color='black', ha='right')
+    plt.text(105, 105, f'Nodes expanded: {rrt.num_nodes}', fontsize=12, color='black', ha='right')
 
     # Labels and title
     plt.title('RRT with Obstacles: Search Tree and Path Visualization')
