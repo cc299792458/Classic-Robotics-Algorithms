@@ -16,22 +16,27 @@ if __name__ == '__main__':
     set_seed()
 
     # Create obstacles (list of tuples representing (x, y, width, height))
-    obstacles = [(30, 30, 20, 20), (60, 60, 15, 30)]  # Two rectangular obstacles
+    obstacles = [
+        (30, 30, 20, 20),  # Obstacle 1
+        (60, 60, 15, 30)   # Obstacle 2
+    ]
 
     # Define a new wrapper function for obstacle checking
     def obstacle_check(x_nearest, x_new):
         return is_obstacle_free(x_nearest, x_new, obstacles)
 
-    # Start, goal, and create RRT-Connect object with the obstacle check function
+    # Start and goal positions
     start = [10, 10]
     goal = [100, 100]
     sampling_range = ((0, 100), (0, 100))
+
+    # Create an instance of RRTConnect with the obstacle check function
     rrt_connect = RRTConnect(
-        start=start, 
-        goal=goal, 
-        obstacle_free=obstacle_check, 
-        max_iters=1000, 
-        delta_distance=5, 
+        start=start,
+        goal=goal,
+        obstacle_free=obstacle_check,
+        max_iters=1000,
+        delta_distance=5,
         sampling_range=sampling_range
     )
 
@@ -39,28 +44,38 @@ if __name__ == '__main__':
     path = rrt_connect.plan()
 
     # Visualization of the search tree, final path, and obstacles
-    plt.figure(figsize=(6, 6))
+    plt.figure(figsize=(8, 8))
 
     # Plot the obstacles (rectangles)
     for (ox, oy, width, height) in obstacles:
-        plt.gca().add_patch(plt.Rectangle((ox, oy), width, height, color='gray', alpha=0.5))
+        plt.gca().add_patch(
+            plt.Rectangle((ox, oy), width, height, color='gray')
+        )
 
     # Plot all the search tree edges
     for edge in rrt_connect.all_edges:
         p1, p2 = edge
-        plt.plot([p1[0], p2[0]], [p1[1], p2[1]], 'y-', alpha=0.5)  # Yellow lines for search tree
+        plt.plot([p1[0], p2[0]], [p1[1], p2[1]], color='yellow', linestyle='-')
 
     # If a path is found, plot it
     if path is not None and len(path) > 0:
         path = np.array(path)
-        plt.plot(path[:, 0], path[:, 1], 'b-', label='Path')  # Plot the final path in blue
+        plt.plot(
+            path[:, 0], path[:, 1],
+            color='blue', linestyle='-', linewidth=2, label='Path'
+        )
+    else:
+        print("No path found!")
 
     # Plot start and goal points
-    plt.scatter(start[0], start[1], color='g', label='Start')  # Plot the start point
-    plt.scatter(goal[0], goal[1], color='r', label='Goal')  # Plot the goal point
+    plt.scatter(start[0], start[1], color='green', s=100, label='Start')
+    plt.scatter(goal[0], goal[1], color='red', s=100, label='Goal')
 
     # Add text to indicate the number of expanded nodes in the top-right corner
-    plt.text(105, 105, f'Nodes expanded: {rrt_connect.num_nodes}', fontsize=12, color='black', ha='right')
+    plt.text(
+        105, 105, f'Nodes expanded: {rrt_connect.num_nodes}',
+        fontsize=12, color='black', ha='right'
+    )
 
     # Labels and title
     plt.title('RRT-Connect with Obstacles: Search Tree and Path Visualization')
