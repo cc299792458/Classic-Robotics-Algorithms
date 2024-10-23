@@ -10,6 +10,7 @@ class RRT:
         self.sampling_range = sampling_range  # Sampling range as ((x_min, x_max), (y_min, y_max))
         self.tree = [self.start]  # Initialize tree with the start node
         self.parent = {self.start: None}  # Dictionary to store parent of each node
+        self.all_nodes = []  # List to store nodes in the order they are added
         self.all_edges = []  # List to store all edges for visualization
         self.num_nodes = 1  # Initialize number of nodes with the start node
 
@@ -45,7 +46,7 @@ class RRT:
 
     def plan(self):
         """Run the RRT algorithm to find a path from start to goal."""
-        for _ in range(self.max_iters):
+        for i in range(self.max_iters):
             x_sample = self.sample()
             x_nearest = self.nearest(self.tree, x_sample)
             x_new = self.steer(x_nearest, x_sample)
@@ -53,6 +54,7 @@ class RRT:
                 self.tree.append(x_new)
                 self.parent[x_new] = x_nearest
                 self.all_edges.append((x_nearest, x_new))
+                self.all_nodes.append(x_new)
                 self.num_nodes += 1  # Increment the number of nodes
 
                 # Check if the goal has been reached
@@ -61,6 +63,7 @@ class RRT:
                         self.tree.append(self.goal)
                         self.parent[self.goal] = x_new
                         self.all_edges.append((x_new, self.goal))
+                        self.all_nodes.append(self.goal)
                         self.num_nodes += 1  # Increment for goal node
                         return self.reconstruct_path(self.goal)
         return None  # Return None if no path is found within max_iters

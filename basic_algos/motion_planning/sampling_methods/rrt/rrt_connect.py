@@ -1,3 +1,5 @@
+import numpy as np
+
 from basic_algos.motion_planning.sampling_methods.rrt.rrt import RRT
 
 class RRTConnect(RRT):
@@ -18,7 +20,9 @@ class RRTConnect(RRT):
             parent[x_new] = x_nearest
             self.all_edges.append((x_nearest, x_new))
             self.num_nodes += 1  # Increment the number of nodes
-            if x_new == x_target:
+
+            # Use a distance threshold instead of exact equality
+            if np.linalg.norm(np.array(x_new) - np.array(x_target)) < self.delta_distance:
                 return 'Reached', x_new
             else:
                 return 'Advanced', x_new
@@ -31,13 +35,14 @@ class RRTConnect(RRT):
         """
         status = 'Advanced'
         x_nearest = self.nearest(tree, x_target)
-        while True:
+        while status == 'Advanced':
             status, x_new = self.extend(tree, parent, x_nearest, x_target)
             if status == 'Trapped':
                 return 'Trapped', x_nearest
             if status == 'Reached':
                 return 'Reached', x_new
-            x_nearest = x_new
+            x_nearest = x_new  # Continue extending from the new node
+        return status, x_nearest
 
     def plan(self):
         """Run the RRT-Connect algorithm to find a path from start to goal."""
@@ -45,9 +50,10 @@ class RRTConnect(RRT):
             x_sample = self.sample()
 
             # Extend the start tree towards the sampled point
+            x_nearest_start = self.nearest(self.tree, x_sample)
             status, x_new_start = self.extend(
                 self.tree, self.parent,
-                self.nearest(self.tree, x_sample), x_sample
+                x_nearest_start, x_sample
             )
             if status != 'Trapped':
                 # Try to connect the goal tree to the new node in the start tree
@@ -66,7 +72,7 @@ class RRTConnect(RRT):
 
     def reconstruct_bidirectional_path(self, x_start_connect, x_goal_connect):
         """Reconstruct the path from start to goal using both trees."""
-        # Path from start to the connection point in start tree
+        # Path from start to the connection point in the start tree
         path_start = []
         node = x_start_connect
         while node is not None:
@@ -74,7 +80,7 @@ class RRTConnect(RRT):
             node = self.parent.get(node)
         path_start.reverse()
 
-        # Path from goal to the connection point in goal tree
+        # Path from goal to the connection point in the goal tree
         path_goal = []
         node = x_goal_connect
         while node is not None:
