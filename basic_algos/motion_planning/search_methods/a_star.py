@@ -1,6 +1,6 @@
 import heapq
 
-class AStarMotionPlanner:
+class AStar:
     def __init__(self, start, goal, neighbors, cost, heuristic, constraints=None):
         self.start = start
         self.goal = goal
