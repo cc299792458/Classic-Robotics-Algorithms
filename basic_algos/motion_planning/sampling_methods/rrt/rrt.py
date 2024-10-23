@@ -1,61 +1,73 @@
 import numpy as np
 
 class RRT:
-    def __init__(self, start, goal, obstacle_free, max_iters, delta_distance, goal_sample_rate, sampling_range):
-        self.start = np.array(start)
-        self.goal = np.array(goal)
+    def __init__(self, start, goal, obstacle_free, max_iters, delta_distance, sampling_range):
+        self.start = tuple(start)
+        self.goal = tuple(goal)
         self.obstacle_free = obstacle_free  # Function to check if a motion is collision-free
         self.max_iters = max_iters
         self.delta_distance = delta_distance  # Step size for each extension
-        self.goal_sample_rate = goal_sample_rate  # Probability of sampling the goal
-        self.sampling_range = sampling_range  # Sampling range (tuple indicating the range in each dimension)
-        self.tree = [tuple(self.start)]  # Initialize tree with the start node
-        self.parent = {tuple(self.start): None}  # Track parents to reconstruct path
+        self.sampling_range = sampling_range  # Sampling range as ((x_min, x_max), (y_min, y_max))
+        self.tree = [self.start]  # Initialize tree with the start node
+        self.parent = {self.start: None}  # Track parents to reconstruct path
         self.all_edges = []  # To store all edges for visualization
         self.num_nodes = 1  # Start with the initial node
 
     def sample(self):
-        """Randomly sample a point in space, biased towards the goal with some probability."""
-        if np.random.rand() > self.goal_sample_rate:
-            return tuple(np.random.rand(2) * np.array(self.sampling_range))  # Random point in the space
-        return tuple(self.goal)  # Sample the goal with some probability
+        """Randomly sample a point in space."""
+        x_min, x_max = self.sampling_range[0]
+        y_min, y_max = self.sampling_range[1]
+        x = np.random.uniform(x_min, x_max)
+        y = np.random.uniform(y_min, y_max)
+        return (x, y)
 
     def nearest(self, point):
         """Find the nearest node in the tree to the sampled point."""
-        distances = [np.linalg.norm(np.array(node) - point) for node in self.tree]
+        distances = [np.linalg.norm(np.array(node) - np.array(point)) for node in self.tree]
         nearest_idx = np.argmin(distances)
-        return np.array(self.tree[nearest_idx])
+        return self.tree[nearest_idx]
 
-    def local_planner(self, x_nearest, x_sample):
-        """Generate a new point towards the sample within the step size delta_distance."""
-        assert np.linalg.norm(x_sample - x_nearest) > 0, 'Distance should be larger than 0'
-        direction = (x_sample - x_nearest) / np.linalg.norm(x_sample - x_nearest)
-        x_new = x_nearest + direction * self.delta_distance
-        return tuple(x_new)
-
-    def reconstruct_path(self, x_new):
-        """Reconstruct the path from start to goal."""
-        path = [x_new]
-        while x_new is not None:  # Ensure we stop when we reach the start node (which has None as parent)
-            x_new = self.parent.get(tuple(x_new), None)
-            if x_new is not None:
-                path.append(x_new)
-        return path[::-1]  # Return reversed path
+    def steer(self, from_node, to_point):
+        """Steer from from_node towards to_point by a maximum of delta_distance."""
+        from_node = np.array(from_node)
+        to_point = np.array(to_point)
+        direction_vector = to_point - from_node
+        distance = np.linalg.norm(direction_vector)
+        if distance == 0:
+            return tuple(from_node)
+        direction = direction_vector / distance
+        delta = min(self.delta_distance, distance)
+        new_node = from_node + direction * delta
+        return tuple(new_node)
 
     def plan(self):
         """Run the RRT algorithm to find a path to the goal."""
         for i in range(self.max_iters):
             x_sample = self.sample()
-            x_nearest = self.nearest(np.array(x_sample))
-            x_new = self.local_planner(x_nearest, np.array(x_sample))
-            if self.obstacle_free(x_nearest, x_new):  # Check for collision-free motion
+            x_nearest = self.nearest(x_sample)
+            x_new = self.steer(x_nearest, x_sample)
+            if self.obstacle_free(x_nearest, x_new):
                 self.tree.append(x_new)
-                self.parent[x_new] = tuple(x_nearest)
-                self.all_edges.append((x_nearest, x_new))  # Store the edge for tree visualization
-                self.num_nodes += 1  # Increment node count
+                self.parent[x_new] = x_nearest
+                self.all_edges.append((x_nearest, x_new))
+                self.num_nodes += 1
 
-                # Check if we've reached the goal region
-                if np.linalg.norm(np.array(x_new) - self.goal) < self.delta_distance and self.obstacle_free(np.array(x_new), self.goal):
-                    return self.reconstruct_path(x_new)
+                # Check if goal is reached
+                if np.linalg.norm(np.array(x_new) - np.array(self.goal)) < self.delta_distance:
+                    if self.obstacle_free(x_new, self.goal):
+                        self.tree.append(self.goal)
+                        self.parent[self.goal] = x_new
+                        self.all_edges.append((x_new, self.goal))
+                        return self.reconstruct_path(self.goal)
 
         return None  # Return failure if no path is found within max_iters
+
+    def reconstruct_path(self, end_node):
+        """Reconstruct the path from start to the given end_node."""
+        path = []
+        node = end_node
+        while node is not None:
+            path.append(node)
+            node = self.parent.get(node)
+        path.reverse()
+        return path

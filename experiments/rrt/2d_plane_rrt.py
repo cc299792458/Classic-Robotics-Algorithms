@@ -25,14 +25,13 @@ if __name__ == '__main__':
     # Start, goal, and create RRT object with the obstacle check function
     start = [10, 10]
     goal = [100, 100]
-    sampling_range = (100, 100)
+    sampling_range = ((0, 100), (0, 100))
     rrt = RRT(
         start=start, 
         goal=goal, 
         obstacle_free=obstacle_check, 
         max_iters=1000, 
         delta_distance=5, 
-        goal_sample_rate=0.1, 
         sampling_range=sampling_range
     )
 

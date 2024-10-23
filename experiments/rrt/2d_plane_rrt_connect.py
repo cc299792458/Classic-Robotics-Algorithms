@@ -25,7 +25,7 @@ if __name__ == '__main__':
     # Start, goal, and create RRT-Connect object with the obstacle check function
     start = [10, 10]
     goal = [100, 100]
-    sampling_range = (100, 100)
+    sampling_range = ((0, 100), (0, 100))
     rrt_connect = RRTConnect(
         start=start, 
         goal=goal, 
