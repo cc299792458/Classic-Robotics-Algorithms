@@ -28,6 +28,7 @@ class RRT:
 
     def local_planner(self, x_nearest, x_sample):
         """Generate a new point towards the sample within the step size delta_distance."""
+        assert np.linalg.norm(x_sample - x_nearest) > 0, 'Distance should be larger than 0'
         direction = (x_sample - x_nearest) / np.linalg.norm(x_sample - x_nearest)
         x_new = x_nearest + direction * self.delta_distance
         return tuple(x_new)
