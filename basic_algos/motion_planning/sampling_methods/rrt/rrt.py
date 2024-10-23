@@ -45,7 +45,7 @@ class RRT:
 
     def plan(self):
         """Run the RRT algorithm to find a path from start to goal."""
-        for i in range(self.max_iters):
+        for _ in range(self.max_iters):
             x_sample = self.sample()
             x_nearest = self.nearest(self.tree, x_sample)
             x_new = self.steer(x_nearest, x_sample)
