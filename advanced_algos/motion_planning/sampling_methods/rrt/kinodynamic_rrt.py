@@ -1,4 +1,6 @@
 import numpy as np
+
+from tqdm import tqdm
 from scipy.integrate import solve_ivp
 
 class KinodynamicRRT:
@@ -17,13 +19,16 @@ class KinodynamicRRT:
         self.all_edges = []  # List to store all edges for visualization
         self.num_nodes = 1  # Initialize number of nodes with the start state
 
-    def sample_state(self):
-        """Randomly sample a state within the sampling ranges."""
-        x = np.random.uniform(*self.sampling_range[0])
-        y = np.random.uniform(*self.sampling_range[1])
-        vx = np.random.uniform(*self.sampling_range[2])
-        vy = np.random.uniform(*self.sampling_range[3])
-        return np.array([x, y, vx, vy])
+    def sample_state(self, goal_bias=0.1):
+        """Randomly sample a state within the sampling ranges or with a goal bias."""
+        if np.random.rand() < goal_bias:
+            return self.goal  # Bias towards goal
+        else:
+            x = np.random.uniform(*self.sampling_range[0])
+            y = np.random.uniform(*self.sampling_range[1])
+            vx = np.random.uniform(*self.sampling_range[2])
+            vy = np.random.uniform(*self.sampling_range[3])
+            return np.array([x, y, vx, vy])
 
     def nearest(self, tree, state, position_weight=1.0, velocity_weight=1.0):
         """
@@ -73,13 +78,15 @@ class KinodynamicRRT:
 
     def plan(self):
         """Run the Kinodynamic RRT algorithm to find a path from start to goal."""
-        for _ in range(self.max_iters):
+        for _ in tqdm(range(self.max_iters)):
             x_rand = self.sample_state()
             x_nearest = self.nearest(self.tree, x_rand)
             control = self.sample_control()
             time = np.random.uniform(self.dt, self.max_time)
             x_new = self.propagate(x_nearest, control, time)
-            if x_new is not None and self.obstacle_free(x_nearest, x_new):
+
+            # Check if the new state is collision-free and not already in the tree
+            if self.obstacle_free(x_nearest, x_new) and not any(np.allclose(x_new, node) for node in self.tree):
                 self.tree.append(x_new)
                 self.parent[tuple(x_new)] = tuple(x_nearest)
                 self.controls[tuple(x_new)] = control
@@ -89,6 +96,7 @@ class KinodynamicRRT:
                 # Check if the goal has been reached within a threshold
                 if np.linalg.norm(x_new[:2] - self.goal[:2]) <= 2.0:
                     return self.reconstruct_path(x_new)
+                
         return None  # Return None if no path is found within max_iters
 
     def reconstruct_path(self, end_state):

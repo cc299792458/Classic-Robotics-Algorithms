@@ -35,10 +35,10 @@ if __name__ == '__main__':
 
     # Start and goal states (position and velocity)
     start = [20, 20, 0, 0]
-    goal = [100, 100, 0, 0]
-    sampling_range = ((0, 110), (0, 110), (-10, 10), (-10, 10))
-    u_limits = ((-1, 1), (-1, 1))
-    dt = 0.1
+    goal = [80, 80, 0, 0]
+    sampling_range = ((0, 100), (0, 100), (-20, 20), (-20, 20))
+    u_limits = ((-10, 10), (-10, 10))
+    dt = 0.25
     max_time = 1.0
 
     # Create an instance of KinodynamicRRT
@@ -46,7 +46,7 @@ if __name__ == '__main__':
         start=start,
         goal=goal,
         obstacle_free=obstacle_check,
-        max_iters=1000,
+        max_iters=2000,
         sampling_range=sampling_range,
         u_limits=u_limits,
         dt=dt,
@@ -142,7 +142,7 @@ if __name__ == '__main__':
 
     # Create the animation
     ani = animation.FuncAnimation(
-        fig, update, frames=total_frames, interval=50, repeat=False
+        fig, update, frames=total_frames, interval=1, repeat=False
     )
 
     plt.show()
