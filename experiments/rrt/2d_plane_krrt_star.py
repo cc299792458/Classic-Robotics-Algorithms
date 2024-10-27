@@ -1,10 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
 
 from utils.misc_utils import set_seed
 from utils.math_utils import line_intersects_rect
-from basic_algos.motion_planning.sampling_methods.rrt import RRTStar
+from basic_algos.motion_planning.sampling_methods.rrt import kRRTStar
+
+# NOTE: Why set max_iters=2000 and there is a sharp corner?
+# NOTE: Why rrt* seems faster than rrt?
 
 def is_obstacle_free(p1, p2, obstacles):
     """Check if the line segment between p1 and p2 is collision-free."""
@@ -34,12 +36,12 @@ if __name__ == '__main__':
     goal = (90, 90)
     sampling_range = ((0, 100), (0, 100))
 
-    # Create an instance of RRTStar
-    rrt_star = RRTStar(
+    # Create an instance of kRRTStar
+    rrt_star = kRRTStar(
         start=start,
         goal=goal,
         obstacle_free=obstacle_check,
-        max_iters=1000,
+        max_iters=20000,
         delta_distance=5.0,
         sampling_range=sampling_range
     )
@@ -60,7 +62,7 @@ if __name__ == '__main__':
     ax.scatter(start[0], start[1], color='green', s=100, label='Start')
     ax.scatter(goal[0], goal[1], color='red', s=100, label='Goal')
 
-    ax.set_title('RRT* Path Planning')
+    ax.set_title('kRRT* Path Planning')
     ax.legend(loc='upper left')
     ax.grid(True)
     ax.set_xlim(0, 100)
@@ -73,7 +75,7 @@ if __name__ == '__main__':
         p1, p2 = edge
         ax.plot(
             [p1[0], p2[0]], [p1[1], p2[1]],
-            color='lightblue', linestyle='-', linewidth=0.5, alpha=0.8
+            color='yellow', linestyle='-', linewidth=1.0, alpha=0.8
         )
 
     # Plot the path if found
@@ -81,7 +83,7 @@ if __name__ == '__main__':
         path_array = np.array(path)
         ax.plot(
             path_array[:, 0], path_array[:, 1],
-            color='orange', linestyle='-', linewidth=2, label='Path'
+            color='blue', linestyle='-', linewidth=2, label='Path'
         )
 
     plt.show()
