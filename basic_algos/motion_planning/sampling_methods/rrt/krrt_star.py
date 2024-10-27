@@ -5,9 +5,9 @@ from scipy.spatial import KDTree  # Import KDTree for nearest neighbor search
 from basic_algos.motion_planning.sampling_methods.rrt.rrt import RRT
 
 class kRRTStar(RRT):
-    def __init__(self, start, goal, obstacle_free, max_iters, delta_distance, sampling_range, num_nearest_neighbors=5):
+    def __init__(self, start, goal, obstacle_free, max_iters, delta_distance, sampling_range, num_nearest_neighbors=33):
         super().__init__(start, goal, obstacle_free, max_iters, delta_distance, sampling_range)
-        self.num_nearest_neighbors = num_nearest_neighbors  # Number of nearest neighbors to consider, default is 5
+        self.num_nearest_neighbors = num_nearest_neighbors  # Number of nearest neighbors to consider, default is 33
         self.cost = {self.start: 0.0}  # Cost from start to each node
         
         self.kd_tree = KDTree([self.start])  # Initialize KDTree with start node

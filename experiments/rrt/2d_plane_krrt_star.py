@@ -41,7 +41,7 @@ if __name__ == '__main__':
         start=start,
         goal=goal,
         obstacle_free=obstacle_check,
-        max_iters=20000,
+        max_iters=10000,
         delta_distance=5.0,
         sampling_range=sampling_range
     )
