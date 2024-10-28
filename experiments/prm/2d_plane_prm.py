@@ -78,7 +78,7 @@ if __name__ == '__main__':
         ax.plot(path_x, path_y, color='orange', linewidth=2, label='Path')
     
     ax.text(
-            98, 2, f'Num samples: {num_samples}\nK neighbors: {k_neighbors}',
+            98, 2, f'Num samples: {num_samples}\nK neighbors: {k_neighbors}\nCollision check count: {prm.collision_check_count}',
             fontsize=12, color='black', ha='right'
         )
 

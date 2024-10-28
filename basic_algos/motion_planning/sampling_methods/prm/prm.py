@@ -11,6 +11,7 @@ class PRM:
         self.sampling_area = sampling_area  # Sampling area ((x_min, x_max), (y_min, y_max))
         self.nodes = []  # List of nodes (configurations) in the roadmap
         self.roadmap = nx.Graph()  # The roadmap graph
+        self.collision_check_count = 0  # Counter to record the number of collision checks
 
     def sample_free(self):
         """Sample a random configuration in the free space."""
@@ -20,6 +21,7 @@ class PRM:
             x = np.random.uniform(x_min, x_max)
             y = np.random.uniform(y_min, y_max)
             config = (x, y)
+            self.collision_check_count += 1
             if self.collision_checker(config, config):
                 return config  # Return the configuration if it's in free space
 
@@ -45,11 +47,14 @@ class PRM:
                 if self.collision_checker(node, neighbor):
                     distance = np.linalg.norm(np.array(node) - np.array(neighbor))
                     self.roadmap.add_edge(node, neighbor, weight=distance)
+                self.collision_check_count += 1
 
     def query(self, start, goal):
         """Find a path from start to goal using the roadmap."""
         if not self.collision_checker(start, start) or not self.collision_checker(goal, goal):
             return None  # Start or goal is in collision
+        
+        self.collision_check_count += 2
 
         # Connect start and goal to the roadmap
         self.roadmap.add_node(start)
@@ -66,6 +71,7 @@ class PRM:
             if self.collision_checker(start, neighbor):
                 distance = np.linalg.norm(np.array(start) - np.array(neighbor))
                 self.roadmap.add_edge(start, neighbor, weight=distance)
+            self.collision_check_count += 1
 
         # Connect goal to nearest neighbors
         distances, indices = kdtree.query(goal, k=self.k_neighbors)
@@ -74,6 +80,7 @@ class PRM:
             if self.collision_checker(goal, neighbor):
                 distance = np.linalg.norm(np.array(goal) - np.array(neighbor))
                 self.roadmap.add_edge(goal, neighbor, weight=distance)
+            self.collision_check_count += 1
 
         # Use Dijkstra's algorithm to find the shortest path
         try:

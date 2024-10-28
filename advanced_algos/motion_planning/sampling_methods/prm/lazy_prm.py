@@ -4,6 +4,9 @@ import networkx as nx
 from scipy.spatial import cKDTree
 from basic_algos.motion_planning.sampling_methods.prm import PRM
 
+# NOTE: This implementation of LazyPRM differs from the original paper, as we sample nodes exclusively from the free configuration space. 
+# Therefore, collision checking during the query stage is unnecessary.
+
 class LazyPRM(PRM):
     def __init__(self, num_samples, k_neighbors, collision_checker, sampling_area):
         super().__init__(num_samples, k_neighbors, collision_checker, sampling_area)
@@ -48,6 +51,7 @@ class LazyPRM(PRM):
                     # Remove the invalid edge from the roadmap
                     self.roadmap.remove_edge(node, next_node)
                     valid = False  # Path is invalid
+                self.collision_check_count += 1
                 # Regardless of collision check result, remove the edge from lazy_edges
                 self.lazy_edges.pop(edge, None)
                 self.lazy_edges.pop((next_node, node), None)
@@ -57,6 +61,7 @@ class LazyPRM(PRM):
         """Find a path from start to goal, lazily checking collisions on edges."""
         if not self.collision_checker(start, start) or not self.collision_checker(goal, goal):
             return None  # Start or goal is in collision
+        self.collision_check_count += 2
 
         # Connect start and goal to the roadmap
         self.roadmap.add_node(start)
@@ -70,17 +75,15 @@ class LazyPRM(PRM):
         distances, indices = kdtree.query(start, k=self.k_neighbors)
         for idx in indices:
             neighbor = tuple(nodes_array[idx])
-            if self.collision_checker(start, neighbor):
-                distance = np.linalg.norm(np.array(start) - np.array(neighbor))
-                self.roadmap.add_edge(start, neighbor, weight=distance)
+            distance = np.linalg.norm(np.array(start) - np.array(neighbor))
+            self.roadmap.add_edge(start, neighbor, weight=distance)
 
         # Connect goal to nearest neighbors
         distances, indices = kdtree.query(goal, k=self.k_neighbors)
         for idx in indices:
             neighbor = tuple(nodes_array[idx])
-            if self.collision_checker(goal, neighbor):
-                distance = np.linalg.norm(np.array(goal) - np.array(neighbor))
-                self.roadmap.add_edge(goal, neighbor, weight=distance)
+            distance = np.linalg.norm(np.array(goal) - np.array(neighbor))
+            self.roadmap.add_edge(goal, neighbor, weight=distance)
 
         # Loop until a valid path is found or no path is possible
         while True:
