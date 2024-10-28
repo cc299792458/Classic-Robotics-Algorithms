@@ -32,8 +32,9 @@ class LazyPRM(PRM):
                 self.lazy_edges[(node, neighbor)] = distance  # Save the edge distance without checking collision
                 self.roadmap.add_edge(node, neighbor, weight=distance)
 
-    def _check_and_remove_invalid_edges(self, path):
+    def lazy_collision_check(self, path):
         """Perform collision checking on the edges in the path lazily."""
+        # NOTE: We simplify by only checking collisions on edges in the found path from the start to the end.
         valid = True
         for i in range(len(path) - 1):
             node = path[i]
@@ -81,14 +82,14 @@ class LazyPRM(PRM):
                 distance = np.linalg.norm(np.array(goal) - np.array(neighbor))
                 self.roadmap.add_edge(goal, neighbor, weight=distance)
 
-        # Use Dijkstra's algorithm to find the shortest path
-        try:
-            path = nx.shortest_path(self.roadmap, source=start, target=goal, weight='weight')
-        except nx.NetworkXNoPath:
-            return None  # No path found
+        # Loop until a valid path is found or no path is possible
+        while True:
+            try:
+                # Use Dijkstra's algorithm to find the shortest path
+                path = nx.shortest_path(self.roadmap, source=start, target=goal, weight='weight')
+            except nx.NetworkXNoPath:
+                return None  # No path found
 
-        # Lazy PRM: Perform collision checking lazily on the found path
-        if self._check_and_remove_invalid_edges(path):
-            return path  # Return the valid path
-        else:
-            return None  # No valid path found after checking
+            # Lazy PRM: Perform collision checking lazily on the found path
+            if self.lazy_collision_check(path):
+                return path  # Return the valid path
