@@ -105,3 +105,4 @@ class SecondOrderUnicycle(Dynamics):
 
         # Return the state derivatives
         return np.array([dx_dt, dy_dt, dv_dt, dtheta_dt])
+
