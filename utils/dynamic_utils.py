@@ -72,6 +72,81 @@ class Dynamics:
         """
         raise NotImplementedError("This method should be implemented by subclasses.")
 
+class FirstOrderOmnidirectionalRobot(Dynamics):
+    """
+    First-order omnidirectional robot dynamics model allowing motion in any direction
+    without changing its orientation.
+    """
+
+    def dynamics_equation(self, state, control):
+        """
+        Define the kinematic equation for a first-order omnidirectional robot.
+
+        Params:
+        - state (np.array): The current state [x, y, phi], where:
+            - x and y are the position coordinates.
+            - phi is the robot's orientation (heading angle).
+
+        - control (np.array): The control input [v_x, v_y, omega], where:
+            - v_x and v_y are the translational velocities in the robot's x and y directions.
+            - omega is the rotational velocity around the z-axis.
+
+        Returns:
+        - np.array: The state derivatives [dx/dt, dy/dt, dphi/dt].
+        """
+        # Extract state variables
+        x, y, phi = state
+
+        # Extract control inputs
+        v_x, v_y, omega = control
+
+        # Dynamics equations for first-order omnidirectional robot
+        dx_dt = v_x * np.cos(phi) - v_y * np.sin(phi)
+        dy_dt = v_x * np.sin(phi) + v_y * np.cos(phi)
+        dphi_dt = omega
+
+        return np.array([dx_dt, dy_dt, dphi_dt])
+    
+class SecondOrderOmnidirectionalRobot(Dynamics):
+    """
+    Second-order omnidirectional robot dynamics model allowing motion in any direction
+    with acceleration control.
+    """
+
+    def dynamics_equation(self, state, control):
+        """
+        Define the dynamics equation for a second-order omnidirectional robot.
+
+        Params:
+        - state (np.array): The current state [x, y, v_x, v_y, phi, omega], where:
+            - x and y are the position coordinates.
+            - v_x and v_y are the translational velocities in the robot's x and y directions.
+            - phi is the robot's orientation (heading angle).
+            - omega is the rotational velocity around the z-axis.
+
+        - control (np.array): The control input [a_x, a_y, alpha], where:
+            - a_x and a_y are the translational accelerations in the robot's x and y directions.
+            - alpha is the rotational acceleration around the z-axis.
+
+        Returns:
+        - np.array: The state derivatives [dx/dt, dy/dt, dv_x/dt, dv_y/dt, dphi/dt, domega/dt].
+        """
+        # Extract state variables
+        x, y, v_x, v_y, phi, omega = state
+
+        # Extract control inputs
+        a_x, a_y, alpha = control
+
+        # Dynamics equations for second-order omnidirectional robot
+        dx_dt = v_x
+        dy_dt = v_y
+        dv_x_dt = a_x
+        dv_y_dt = a_y
+        dphi_dt = omega
+        domega_dt = alpha
+
+        return np.array([dx_dt, dy_dt, dv_x_dt, dv_y_dt, dphi_dt, domega_dt])
+
 class FirstOrderUnicycle(Dynamics):
     """
     First-order unicycle dynamics, inheriting from the base Dynamics class.
