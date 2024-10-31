@@ -56,7 +56,9 @@ if __name__ == '__main__':
     # Run the Kinodynamic RRT algorithm
     path = rrt.plan()
 
-    # Visualization of the search tree, final path, and obstacles
+    # Visualization settings
+    animate_plot = False  # Set to False for a static plot
+
     fig, ax = plt.subplots(figsize=(8, 8))
 
     # Plot the obstacles (rectangles)
@@ -69,7 +71,7 @@ if __name__ == '__main__':
     ax.scatter(start[0], start[1], color='green', s=100, label='Start')
     ax.scatter(goal[0], goal[1], color='red', s=100, label='Goal')
 
-    ax.set_title('Kinodynamic RRT with Obstacles: Animated Search Tree')
+    ax.set_title('Kinodynamic RRT with Obstacles')
     ax.legend(loc='upper left')
     ax.grid(True)
     ax.set_xlim(0, 110)
@@ -77,72 +79,75 @@ if __name__ == '__main__':
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
 
-    # Initialize lists to store the data for animation
     edges = rrt.all_edges  # List of edges in the order they were added
-    total_frames = len(edges)
 
-    # Create a list to store the number of nodes up to each frame
-    num_nodes_list = []
-    current_num_nodes = 1  # Start with the start node
+    if animate_plot:
+        # Animation mode
+        total_frames = len(edges)
 
-    # Build num_nodes_list based on the edges
-    for edge in edges:
-        current_num_nodes += 1  # Increment for each new node added
-        num_nodes_list.append(current_num_nodes)
+        # Create a function to update the plot
+        def update(num):
+            ax.clear()
 
-    # Create a function to update the plot
-    def update(num):
-        ax.clear()
+            # Re-plot the obstacles
+            for (ox, oy, width, height) in obstacles:
+                ax.add_patch(
+                    plt.Rectangle((ox, oy), width, height, color='gray', alpha=0.8)
+                )
 
-        # Re-plot the obstacles
-        for (ox, oy, width, height) in obstacles:
-            ax.add_patch(
-                plt.Rectangle((ox, oy), width, height, color='gray', alpha=0.8)
-            )
+            # Re-plot start and goal points
+            ax.scatter(start[0], start[1], color='green', s=100, label='Start')
+            ax.scatter(goal[0], goal[1], color='red', s=100, label='Goal')
 
-        # Re-plot start and goal points
-        ax.scatter(start[0], start[1], color='green', s=100, label='Start')
-        ax.scatter(goal[0], goal[1], color='red', s=100, label='Goal')
+            # Plot the edges up to the current frame
+            for edge in edges[:num]:
+                p1, p2 = edge
+                ax.plot(
+                    [p1[0], p2[0]], [p1[1], p2[1]],
+                    color='yellow', linestyle='-', linewidth=1, alpha=0.8
+                )
 
-        # Plot the edges up to the current frame
-        for edge in edges[:num]:
+            # Plot the path if found and at the last frame
+            if path is not None and len(path) > 0 and num == total_frames - 1:
+                path_array = np.array(path)
+                ax.plot(
+                    path_array[:, 0], path_array[:, 1],
+                    color='blue', linestyle='-', linewidth=2, label='Path'
+                )
+
+            ax.set_title('Kinodynamic RRT with Obstacles: Animated Search Tree')
+            ax.legend(loc='upper left')
+            ax.grid(True)
+            ax.set_xlim(0, 110)
+            ax.set_ylim(0, 110)
+            ax.set_xlabel('X')
+            ax.set_ylabel('Y')
+
+        # Create the animation
+        ani = animation.FuncAnimation(
+            fig, update, frames=total_frames, interval=1, repeat=False
+        )
+
+        plt.show()
+
+    else:
+        # Static plot mode
+        # Plot all edges
+        for edge in edges:
             p1, p2 = edge
             ax.plot(
                 [p1[0], p2[0]], [p1[1], p2[1]],
                 color='yellow', linestyle='-', linewidth=1, alpha=0.8
             )
 
-        # Plot the path if found and at the last frame
-        if path is not None and len(path) > 0 and num == total_frames - 1:
+        # Plot the path if found
+        if path is not None and len(path) > 0:
             path_array = np.array(path)
             ax.plot(
                 path_array[:, 0], path_array[:, 1],
                 color='blue', linestyle='-', linewidth=2, label='Path'
             )
 
-        # Dynamic update of the number of expanded nodes
-        if num > 0:
-            current_num_nodes = num_nodes_list[num - 1]
-        else:
-            current_num_nodes = 1  # Only the start node
-
-        # Add text to indicate the number of expanded nodes dynamically
-        ax.text(
-            105, 105, f'Nodes expanded: {current_num_nodes}',
-            fontsize=12, color='black', ha='right'
-        )
-
-        ax.set_title('Kinodynamic RRT with Obstacles: Animated Search Tree')
+        ax.set_title('Kinodynamic RRT with Obstacles: Final Path')
         ax.legend(loc='upper left')
-        ax.grid(True)
-        ax.set_xlim(0, 110)
-        ax.set_ylim(0, 110)
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-
-    # Create the animation
-    ani = animation.FuncAnimation(
-        fig, update, frames=total_frames, interval=1, repeat=False
-    )
-
-    plt.show()
+        plt.show()
