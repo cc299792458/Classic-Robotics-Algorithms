@@ -71,6 +71,41 @@ class Dynamics:
         - np.array: The state derivative (e.g., velocity or acceleration) based on the control input.
         """
         raise NotImplementedError("This method should be implemented by subclasses.")
+    
+class SecondOrderDoubleIntegrator2D(Dynamics):
+    """
+    Second-order 2D Double Integrator (2DDI) dynamics model allowing movement in the x and y directions
+    with acceleration control.
+    """
+
+    def dynamics_equation(self, state, control):
+        """
+        Define the dynamics equation for a 2D Double Integrator.
+
+        Params:
+        - state (np.array): The current state [x, y, v_x, v_y], where:
+            - x and y are the position coordinates.
+            - v_x and v_y are the velocities in the x and y directions.
+
+        - control (np.array): The control input [a_x, a_y], where:
+            - a_x and a_y are the accelerations in the x and y directions.
+
+        Returns:
+        - np.array: The state derivatives [dx/dt, dy/dt, dv_x/dt, dv_y/dt].
+        """
+        # Extract state variables
+        x, y, v_x, v_y = state
+
+        # Extract control inputs
+        a_x, a_y = control
+
+        # Dynamics equations for 2D Double Integrator
+        dx_dt = v_x
+        dy_dt = v_y
+        dv_x_dt = a_x
+        dv_y_dt = a_y
+
+        return np.array([dx_dt, dy_dt, dv_x_dt, dv_y_dt])
 
 class FirstOrderOmnidirectionalRobot(Dynamics):
     """
