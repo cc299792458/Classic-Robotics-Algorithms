@@ -72,6 +72,39 @@ class Dynamics:
         """
         raise NotImplementedError("This method should be implemented by subclasses.")
 
+class FirstOrderUnicycle(Dynamics):
+    """
+    First-order unicycle dynamics, inheriting from the base Dynamics class.
+    Implements the dynamics_equation method for the first-order unicycle model.
+    """
+
+    def dynamics_equation(self, state, control):
+        """
+        Define the dynamics equation for a first-order unicycle.
+
+        Params:
+        - state (np.array): The current state [x, y, phi].
+        - control (np.array): The control input [v, omega], where:
+            - v is the linear velocity (speed along the direction of the vehicle).
+            - omega is the angular velocity (rate of change of orientation).
+
+        Returns:
+        - np.array: The state derivatives [dx/dt, dy/dt, dphi/dt].
+        """
+        # Extract state variables
+        x, y, phi = state
+
+        # Extract control inputs
+        v, omega = control
+
+        # Dynamics equations for first-order unicycle
+        dx_dt = v * np.cos(phi)     # Change in x (linear velocity in x direction)
+        dy_dt = v * np.sin(phi)     # Change in y (linear velocity in y direction)
+        dphi_dt = omega             # Change in orientation (angular velocity)
+
+        # Return the state derivatives
+        return np.array([dx_dt, dy_dt, dphi_dt])
+
 class SecondOrderUnicycle(Dynamics):
     """
     Second-order unicycle dynamics, inheriting from the base Dynamics class.
@@ -83,26 +116,25 @@ class SecondOrderUnicycle(Dynamics):
         Define the dynamics equation for a second-order unicycle.
 
         Params:
-        - state (np.array): The current state [x, y, v, theta].
+        - state (np.array): The current state [x, y, v, phi].
         - control (np.array): The control input [a_v, omega], where:
             - a_v is the linear acceleration (change in velocity).
             - omega is the angular velocity (change in orientation).
 
         Returns:
-        - np.array: The state derivatives [dx/dt, dy/dt, dv/dt, dtheta/dt].
+        - np.array: The state derivatives [dx/dt, dy/dt, dv/dt, dphi/dt].
         """
         # Extract state variables
-        x, y, v, theta = state
+        x, y, v, phi = state
 
         # Extract control inputs
         a_v, omega = control
 
         # Dynamics equations for second-order unicycle
-        dx_dt = v * np.cos(theta)        # Change in x (linear velocity in x direction)
-        dy_dt = v * np.sin(theta)        # Change in y (linear velocity in y direction)
-        dv_dt = a_v                      # Change in velocity (linear acceleration)
-        dtheta_dt = omega                # Change in orientation (angular velocity)
+        dx_dt = v * np.cos(phi)     # Change in x (linear velocity in x direction)
+        dy_dt = v * np.sin(phi)     # Change in y (linear velocity in y direction)
+        dv_dt = a_v                 # Change in velocity (linear acceleration)
+        dphi_dt = omega             # Change in orientation (angular velocity)
 
         # Return the state derivatives
-        return np.array([dx_dt, dy_dt, dv_dt, dtheta_dt])
-
+        return np.array([dx_dt, dy_dt, dv_dt, dphi_dt])

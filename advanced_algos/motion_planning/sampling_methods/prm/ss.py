@@ -16,9 +16,9 @@ class SS:
         dynamics,
         collision_checker,
         dt=0.1,
-        control_duration=1.0,
+        control_duration_max=1.0,  # Upper limit for the control duration
         goal_tolerance=0.1,
-        max_spline_time=1.0,  # Adjusted to 1.0
+        max_spline_time=1.0,  # Maximum allowed spline time
         bin_resolution=10,  # Default resolution for each dimension
     ):
         """
@@ -32,7 +32,7 @@ class SS:
         - dynamics (Dynamics): An instance of a dynamics model that can simulate the system's evolution.
         - collision_checker (function): A function that checks for collisions between two states.
         - dt (float): Time step for the simulation of the system's evolution (discrete time approximation).
-        - control_duration (float): The total duration for which the sampled control input is applied to evolve the system.
+        - control_duration_max (float): Maximum allowed duration for which the sampled control input is applied.
         - goal_tolerance (float): The tolerance distance within which we consider the goal reached.
         - max_spline_time (float): Maximum allowed time for the spline connection to the goal.
         - bin_resolution (int): Resolution for binning the state space in each dimension.
@@ -44,7 +44,7 @@ class SS:
         self.dynamics = dynamics
         self.collision_checker = collision_checker
         self.dt = dt
-        self.control_duration = control_duration
+        self.control_duration_max = control_duration_max  # Adjusted to randomize within the range [dt, control_duration_max]
         self.goal_tolerance = goal_tolerance
         self.max_spline_time = max_spline_time  # Adjusted to 1.0
         self.bin_resolution = bin_resolution
@@ -147,25 +147,29 @@ class SS:
         lower_bound_control, upper_bound_control = self.control_space_bounds
         control_input = np.random.uniform(lower_bound_control, upper_bound_control)
 
-        # Step 3: Simulate the system's evolution over the sampled duration control_duration
+        # Step 3: Randomly sample a control duration between dt and control_duration_max
+        control_duration = np.random.uniform(self.dt, self.control_duration_max)
+
+        # Step 4: Simulate the system's evolution over the sampled duration control_duration
         new_state = np.copy(current_node)
         t = 0
-        while t < self.control_duration:
+        while t < control_duration:
             new_state = self.dynamics.step(new_state, control_input, self.dt)
             # Ensure the new state is within the state space bounds
             lower_bound_state, upper_bound_state = self.state_space_bounds
             new_state = np.clip(new_state, lower_bound_state, upper_bound_state)
             t += self.dt
 
-        # Step 4: After control_duration, perform collision checking between the start and end states
+        # Step 5: After control_duration, perform collision checking between the start and end states
         if not self.collision_checker(current_node, new_state):
-            # Step 5: If no collision occurs, add the new state to the tree with its parent and control input
+            # Step 6: If no collision occurs, add the new state to the tree with its parent and control input
             self.tree[tuple(new_state)] = (tuple(current_node), control_input)
             self.add_node_to_bin(new_state)
 
     def connect_to_goal(self, state):
         """
-        Try to connect the current state to the goal using a time-constrained cubic spline. If successful, return True.
+        Try to connect the current state to the goal using a time-constrained cubic spline. 
+        Time for the spline connection is also sampled from [dt, max_spline_time].
 
         Params:
         - state (np.array): The current state of the system.
@@ -173,13 +177,16 @@ class SS:
         Returns:
         - bool: True if the spline connection to the goal is collision-free, False otherwise.
         """
-        # Generate a cubic spline connecting the current state to the goal over a time range [0, max_spline_time]
-        spline_time_points = [0, self.max_spline_time]  # Start at 0, end at max_spline_time
+        # Sample a random spline duration between dt and max_spline_time
+        spline_time = np.random.uniform(self.dt, self.max_spline_time)
+
+        # Generate a cubic spline connecting the current state to the goal over the sampled spline time
+        spline_time_points = [0, spline_time]  # Start at 0, end at the sampled spline time
         spline = CubicSpline(spline_time_points, np.vstack([state, self.goal_state]), axis=0)
 
         # Discretize the spline path based on time
         num_points = 20  # Number of points to sample along the spline
-        time_samples = np.linspace(0, self.max_spline_time, num_points)
+        time_samples = np.linspace(0, spline_time, num_points)
 
         for t in time_samples:
             interpolated_state = spline(t)
