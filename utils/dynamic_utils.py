@@ -1,5 +1,7 @@
 import numpy as np
 
+# NOTE: The bicycle model may not be the most commonly used convention.
+
 class Dynamics:
     """
     Base class for system dynamics.
@@ -213,3 +215,88 @@ class SecondOrderUnicycle(Dynamics):
 
         # Return the state derivatives
         return np.array([dx_dt, dy_dt, dv_dt, dphi_dt])
+
+class FirstOrderBicycleModel(Dynamics):
+    """
+    First-order bicycle model for car-like robots (Kinematic Bicycle Model).
+    """
+
+    def __init__(self, wheelbase):
+        """
+        Initialize the first-order bicycle model with a given wheelbase.
+
+        Params:
+        - wheelbase (float): The distance between the front and rear wheels (L).
+        """
+        self.wheelbase = wheelbase
+
+    def dynamics_equation(self, state, control):
+        """
+        Define the kinematic equation for a first-order bicycle model.
+
+        Params:
+        - state (np.array): The current state [x, y, phi, psi], where:
+            - x and y are the position coordinates.
+            - phi is the vehicle's orientation.
+            - psi is the steering angle of the front wheel.
+
+        - control (np.array): The control input [v, omega_psi], where:
+            - v is the linear velocity.
+            - omega_psi is the rate of change of the steering angle.
+
+        Returns:
+        - np.array: The state derivatives [dx/dt, dy/dt, dphi/dt, dpsi/dt].
+        """
+        x, y, phi, psi = state
+        v, omega_psi = control
+
+        dx_dt = v * np.cos(phi)
+        dy_dt = v * np.sin(phi)
+        dphi_dt = (v / self.wheelbase) * np.tan(psi)
+        dpsi_dt = omega_psi
+
+        return np.array([dx_dt, dy_dt, dphi_dt, dpsi_dt])
+
+class SecondOrderBicycleModel(Dynamics):
+    """
+    Simplified second-order bicycle model for car-like robots (Dynamic Bicycle Model),
+    without considering steering angle acceleration.
+    """
+
+    def __init__(self, wheelbase):
+        """
+        Initialize the second-order bicycle model with a given wheelbase.
+
+        Params:
+        - wheelbase (float): The distance between the front and rear wheels (L).
+        """
+        self.wheelbase = wheelbase
+
+    def dynamics_equation(self, state, control):
+        """
+        Define the dynamics equation for a simplified second-order bicycle model.
+
+        Params:
+        - state (np.array): The current state [x, y, v, phi, psi], where:
+            - x and y are the position coordinates.
+            - v is the linear velocity.
+            - phi is the vehicle's orientation.
+            - psi is the steering angle of the front wheel.
+
+        - control (np.array): The control input [a, omega_psi], where:
+            - a is the linear acceleration.
+            - omega_psi is the rate of change of the steering angle.
+
+        Returns:
+        - np.array: The state derivatives [dx/dt, dy/dt, dv/dt, dphi/dt, dpsi/dt].
+        """
+        x, y, v, phi, psi = state
+        a, omega_psi = control
+
+        dx_dt = v * np.cos(phi)
+        dy_dt = v * np.sin(phi)
+        dv_dt = a
+        dphi_dt = (v / self.wheelbase) * np.tan(psi)
+        dpsi_dt = omega_psi
+
+        return np.array([dx_dt, dy_dt, dv_dt, dphi_dt, dpsi_dt])
