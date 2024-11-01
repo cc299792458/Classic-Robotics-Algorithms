@@ -72,9 +72,9 @@ class Dynamics:
         """
         raise NotImplementedError("This method should be implemented by subclasses.")
     
-class SecondOrderDoubleIntegrator2D(Dynamics):
+class TwoDimensionalDoubleIntegrator(Dynamics):
     """
-    Second-order 2D Double Integrator (2DDI) dynamics model allowing movement in the x and y directions
+    TwoDimensionalDoubleIntegrator (2DDI) dynamics model allowing movement in the x and y directions
     with acceleration control.
     """
 
