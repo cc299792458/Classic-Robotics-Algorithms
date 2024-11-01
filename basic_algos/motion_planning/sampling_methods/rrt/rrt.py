@@ -1,5 +1,7 @@
 import numpy as np
 
+from scipy.spatial import cKDTree
+
 class RRT:
     def __init__(self, start, goal, obstacle_free, max_iters, delta_distance, sampling_range):
         self.start = tuple(start)
@@ -14,6 +16,9 @@ class RRT:
         self.all_edges = []  # List to store all edges for visualization
         self.num_nodes = 1  # Initialize number of nodes with the start node
 
+        # Initialize KD Tree for efficient nearest-neighbor search
+        self.kd_tree = cKDTree([self.start])
+
     def sample(self):
         """Randomly sample a point within the sampling range."""
         x_min, x_max = self.sampling_range[0]
@@ -22,11 +27,10 @@ class RRT:
         y = np.random.uniform(y_min, y_max)
         return (x, y)
 
-    def nearest(self, tree, point):
-        """Find the nearest node in the tree to the given point."""
-        distances = [np.linalg.norm(np.array(node) - np.array(point)) for node in tree]
-        nearest_idx = np.argmin(distances)
-        return tree[nearest_idx]
+    def nearest(self, tree, point, kd_tree):
+        """Find the nearest node in the specified tree to the given point using the provided KD Tree."""
+        distance, idx = kd_tree.query(point)
+        return tree[idx]
 
     def steer(self, from_node, to_point):
         """
@@ -44,7 +48,7 @@ class RRT:
             new_node = from_node + direction * self.delta_distance
             return tuple(new_node)
         
-    def extend(self, tree, parent, x_nearest, x_target):
+    def extend(self, tree, parent, x_nearest, x_target, is_goal_tree=False):
         """
         Extend the tree towards x_target from x_nearest.
         Returns a status ('Reached', 'Advanced', 'Trapped') and the new node.
@@ -56,6 +60,12 @@ class RRT:
             self.all_edges.append((x_nearest, x_new))
             self.num_nodes += 1  # Increment the number of nodes
 
+            # Update KD tree with the new node
+            if not is_goal_tree:
+                self.kd_tree = cKDTree(tree)
+            else:
+                self.kd_tree_goal = cKDTree(tree)
+
             if np.linalg.norm(np.array(x_new) - np.array(x_target)) < self.delta_distance:
                 return 'Reached', x_new
             else:
@@ -66,7 +76,7 @@ class RRT:
         """Run the RRT algorithm to find a path from start to goal."""
         for i in range(self.max_iters):
             x_sample = self.sample()
-            x_nearest = self.nearest(self.tree, x_sample)
+            x_nearest = self.nearest(self.tree, x_sample, self.kd_tree)
             status, x_new = self.extend(self.tree, self.parent, x_nearest, x_sample)
             if status != 'Trapped':
                 self.all_nodes.append(x_new)
