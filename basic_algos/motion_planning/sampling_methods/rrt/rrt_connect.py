@@ -1,5 +1,3 @@
-import numpy as np
-
 from basic_algos.motion_planning.sampling_methods.rrt.rrt import RRT
 
 class RRTConnect(RRT):
@@ -43,7 +41,7 @@ class RRTConnect(RRT):
                 )
                 # Check if the trees have connected
                 if status_connect == 'Reached':
-                    return self.reconstruct_bidirectional_path(x_new_start, x_new_goal)
+                    return self.reconstruct_path(x_new_start, x_new_goal)
 
             # Swap the roles of the trees for balanced growth
             self.tree, self.goal_tree = self.goal_tree, self.tree
@@ -51,7 +49,7 @@ class RRTConnect(RRT):
 
         return None  # Return None if no path is found within max_iters
 
-    def reconstruct_bidirectional_path(self, x_start_connect, x_goal_connect):
+    def reconstruct_path(self, x_start_connect, x_goal_connect):
         """Reconstruct the path from start to goal using both trees."""
         # Path from start to the connection point in the start tree
         path_start = []
