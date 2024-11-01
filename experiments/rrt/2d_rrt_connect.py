@@ -29,8 +29,8 @@ if __name__ == '__main__':
         return is_obstacle_free(x_nearest, x_new, obstacles)
 
     # Start and goal positions
-    start = [10, 10]
-    goal = [100, 100]
+    start = [20, 20]
+    goal = [80, 80]
     sampling_range = ((0, 100), (0, 100))
 
     # Create an instance of RRTConnect with the obstacle check function
@@ -68,8 +68,8 @@ if __name__ == '__main__':
     ax.set_title('RRT-Connect')
     ax.legend(loc='upper left')
     ax.grid(True)
-    ax.set_xlim(0, 110)
-    ax.set_ylim(0, 110)
+    ax.set_xlim(0, 100)
+    ax.set_ylim(0, 100)
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
 
@@ -131,8 +131,8 @@ if __name__ == '__main__':
         ax.set_title('RRT-Connect')
         ax.legend(loc='upper left')
         ax.grid(True)
-        ax.set_xlim(0, 110)
-        ax.set_ylim(0, 110)
+        ax.set_xlim(0, 100)
+        ax.set_ylim(0, 100)
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
 
