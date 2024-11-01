@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -43,7 +44,13 @@ if __name__ == '__main__':
     )
 
     # Run the RRT algorithm with obstacles
+    start_time = time.time()
     path = rrt.plan()
+    end_time = time.time()
+    planning_time = end_time - start_time
+
+    # Print the planning time
+    print(f"Planning time: {planning_time:.4f} seconds")
 
     # Visualization of the search tree, final path, and obstacles
     fig, ax = plt.subplots(figsize=(8, 8))
@@ -58,7 +65,7 @@ if __name__ == '__main__':
     ax.scatter(start[0], start[1], color='green', s=100, label='Start')
     ax.scatter(goal[0], goal[1], color='red', s=100, label='Goal')
 
-    ax.set_title('RRT with Obstacles: Animated Search Tree')
+    ax.set_title('RRT')
     ax.legend(loc='upper left')
     ax.grid(True)
     ax.set_xlim(0, 110)

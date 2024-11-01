@@ -9,25 +9,6 @@ class RRTConnect(RRT):
         self.goal_parent = {self.goal: None}  # Parent dictionary for the goal tree
         self.num_nodes = 2  # Initialize number of nodes with start and goal nodes
 
-    def extend(self, tree, parent, x_nearest, x_target):
-        """
-        Extend the tree towards x_target from x_nearest.
-        Returns a status ('Reached', 'Advanced', 'Trapped') and the new node.
-        """
-        x_new = self.steer(x_nearest, x_target)
-        if self.obstacle_free(x_nearest, x_new):
-            tree.append(x_new)
-            parent[x_new] = x_nearest
-            self.all_edges.append((x_nearest, x_new))
-            self.num_nodes += 1  # Increment the number of nodes
-
-            # Use a distance threshold instead of exact equality
-            if np.linalg.norm(np.array(x_new) - np.array(x_target)) < self.delta_distance:
-                return 'Reached', x_new
-            else:
-                return 'Advanced', x_new
-        return 'Trapped', x_nearest
-
     def connect(self, tree, parent, x_target):
         """
         Keep extending the tree towards x_target until it cannot advance.

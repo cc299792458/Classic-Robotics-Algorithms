@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -43,7 +44,13 @@ if __name__ == '__main__':
     )
 
     # Run the RRT-Connect algorithm with obstacles
+    start_time = time.time()
     path = rrt_connect.plan()
+    end_time = time.time()
+    planning_time = end_time - start_time
+
+    # Print the planning time
+    print(f"Planning time: {planning_time:.4f} seconds")
 
     # Visualization of the search trees, final path, and obstacles
     fig, ax = plt.subplots(figsize=(8, 8))
