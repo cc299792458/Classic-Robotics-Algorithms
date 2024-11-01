@@ -1,32 +1,21 @@
 import numpy as np
-
 from tqdm import tqdm
 
 class KinodynamicRRT:
-    def __init__(self, start, goal, obstacle_free, max_iters, state_limits, u_limits, dynamics_model, control_duration, dt):
+    def __init__(self, start, goal, obstacle_free, max_iters, state_limits, u_set, dynamics_model, control_duration, dt, goal_threshold):
         """
         Initialize the Kinodynamic RRT.
-
-        Params:
-        - start: Initial state (could be any format compatible with dynamics model).
-        - goal: Target state.
-        - obstacle_free: Function to check if a transition between two states is collision-free.
-        - max_iters: Maximum number of iterations for the RRT algorithm.
-        - state_limits: Limits for each dimension of the state.
-        - u_limits: Control input limits.
-        - dynamics_model: An instance of a dynamics model class with a .step() method.
-        - control_duration: Fixed duration for control propagation.
-        - dt: Time step for integration.
         """
         self.start = np.array(start)
         self.goal = np.array(goal)
         self.obstacle_free = obstacle_free
         self.max_iters = max_iters
         self.state_limits = state_limits
-        self.u_limits = u_limits
+        self.u_set = u_set
         self.dynamics_model = dynamics_model
         self.control_duration = control_duration
         self.dt = dt
+        self.goal_threshold = goal_threshold
         self.tree = [self.start]
         self.parent = {tuple(self.start): None}
         self.controls = {tuple(self.start): None}
@@ -40,10 +29,6 @@ class KinodynamicRRT:
         else:
             return np.array([np.random.uniform(*limit) for limit in self.state_limits])
         
-    def sample_control(self):
-        """Randomly sample control inputs within the control limits."""
-        return np.array([np.random.uniform(*limit) for limit in self.u_limits])
-
     def nearest(self, tree, state, weights=None):
         """Find the nearest state in the tree to the given state."""
         weights = np.ones(len(state)) if weights is None else weights
@@ -56,14 +41,6 @@ class KinodynamicRRT:
     def propagate(self, state, control, method='euler'):
         """
         Propagate the state using the given control over the fixed control duration.
-
-        Params:
-        - state: Current state.
-        - control: Control input to apply.
-        - method: Integration method ('euler' or 'rk4').
-
-        Returns:
-        - New state after propagation.
         """
         num_steps = int(self.control_duration / self.dt)
         new_state = state
@@ -71,32 +48,41 @@ class KinodynamicRRT:
             new_state = self.dynamics_model.step(new_state, control, self.dt, method)
         return new_state
 
-    def plan(self, integration_method='euler', goal_threshold=2.0):
+    def plan(self, integration_method='euler'):
         """
         Execute the Kinodynamic RRT planning algorithm.
-
-        Params:
-        - integration_method: Method for integration (default is 'euler').
-        - goal_threshold: Threshold distance to consider the goal reached.
-
-        Returns:
-        - A list representing the path from start to goal, if found.
         """
         for _ in tqdm(range(self.max_iters)):
             x_rand = self.sample_state()
             x_nearest = self.nearest(self.tree, x_rand)
-            control = self.sample_control()
-            x_new = self.propagate(x_nearest, control, method=integration_method)
+            
+            closest_new_node = None
+            closest_distance = float('inf')
+            closest_control = None
+            
+            # Try all controls and find the closest new node to x_rand
+            for control in self.u_set:
+                x_new = self.propagate(x_nearest, control, method=integration_method)
+                
+                if self.obstacle_free(x_nearest, x_new) and not any(np.allclose(x_new, node) for node in self.tree):
+                    distance = np.linalg.norm(x_new[:len(self.goal)] - x_rand)
+                    
+                    if distance < closest_distance:
+                        closest_new_node = x_new
+                        closest_distance = distance
+                        closest_control = control
 
-            if self.obstacle_free(x_nearest, x_new) and not any(np.allclose(x_new, node) for node in self.tree):
-                self.tree.append(x_new)
-                self.parent[tuple(x_new)] = tuple(x_nearest)
-                self.controls[tuple(x_new)] = control
-                self.all_edges.append((x_nearest, x_new))
+            # Add the closest new node to the tree if found
+            if closest_new_node is not None:
+                self.tree.append(closest_new_node)
+                self.parent[tuple(closest_new_node)] = tuple(x_nearest)
+                self.controls[tuple(closest_new_node)] = closest_control
+                self.all_edges.append((x_nearest, closest_new_node))
                 self.num_nodes += 1
 
-                if np.linalg.norm(x_new[:len(self.goal)] - self.goal) <= goal_threshold:
-                    return self.reconstruct_path(x_new)
+                # Check if this new node is within the goal threshold
+                if np.linalg.norm(closest_new_node[:len(self.goal)] - self.goal) <= self.goal_threshold:
+                    return self.reconstruct_path(closest_new_node)
                 
         return None
 

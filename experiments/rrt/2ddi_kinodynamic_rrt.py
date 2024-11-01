@@ -37,10 +37,11 @@ if __name__ == '__main__':
     # Start and goal states (position and velocity)
     start = [2, 2, 0, 0]
     goal = [8, 8, 0, 0]
-    state_limits = ((0, 10), (0, 10), (-20, 20), (-20, 20))
-    u_limits = ((-10, 10), (-10, 10))
+    state_limits = ((0, 10), (0, 10), (-2, 2), (-2, 2))
+    u_set = [[1, 0], [-1, 0], [0, 1], [0, -1]]
     control_duration = 0.25
     dt = 0.01
+    goal_threshold = 0.25
 
     # Initialize dynamics model
     dynamics_model = TwoDimensionalDoubleIntegrator()
@@ -52,10 +53,11 @@ if __name__ == '__main__':
         obstacle_free=obstacle_check,
         max_iters=2000,
         state_limits=state_limits,
-        u_limits=u_limits,
+        u_set=u_set,
         dynamics_model=dynamics_model,
         control_duration=control_duration,
-        dt=dt
+        dt=dt,
+        goal_threshold=goal_threshold,
     )
 
     # Run the Kinodynamic RRT algorithm
