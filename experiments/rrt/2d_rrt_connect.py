@@ -65,7 +65,7 @@ if __name__ == '__main__':
     ax.scatter(start[0], start[1], color='green', s=100, label='Start')
     ax.scatter(goal[0], goal[1], color='red', s=100, label='Goal')
 
-    ax.set_title('RRT-Connect with Obstacles: Animated Search Tree')
+    ax.set_title('RRT-Connect')
     ax.legend(loc='upper left')
     ax.grid(True)
     ax.set_xlim(0, 110)
@@ -73,24 +73,17 @@ if __name__ == '__main__':
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
 
-    # Separate edges for start tree and goal tree
-    edges_start = []
-    edges_goal = []
-    num_nodes_list = []  # List to store the number of nodes up to each frame
+    # List to store the number of nodes up to each frame in the correct order
+    num_nodes_list = [2]  # Start with the start and goal nodes
+    current_num_nodes = 2
 
-    # Determine which edges belong to which tree and track node counts
-    current_num_nodes = 2  # Start with the start and goal nodes
-    for edge in rrt_connect.all_edges:
-        if edge[0] in rrt_connect.parent:
-            edges_start.append(edge)
-        else:
-            edges_goal.append(edge)
+    # Track node count directly from the expansion order in `all_edges`
+    for _ in rrt_connect.all_edges:
         current_num_nodes += 1
         num_nodes_list.append(current_num_nodes)
 
-    # Combine the edges in the order they were added
-    edges = edges_start + edges_goal
-    total_frames = len(edges)
+    # Total frames based on the number of edges
+    total_frames = len(rrt_connect.all_edges)
 
     # Create a function to update the plot
     def update(num):
@@ -106,19 +99,14 @@ if __name__ == '__main__':
         ax.scatter(start[0], start[1], color='green', s=100, label='Start')
         ax.scatter(goal[0], goal[1], color='red', s=100, label='Goal')
 
-        # Plot the edges up to the current frame
-        for edge in edges[:num]:
+        # Plot edges up to the current frame in expansion order
+        for edge in rrt_connect.all_edges[:num]:
             p1, p2 = edge
-            if edge in edges_start:
-                ax.plot(
-                    [p1[0], p2[0]], [p1[1], p2[1]],
-                    color='orange', linestyle='-', linewidth=1, alpha=0.8, label='Start Tree' if num == 1 else ""
-                )
-            else:
-                ax.plot(
-                    [p1[0], p2[0]], [p1[1], p2[1]],
-                    color='purple', linestyle='-', linewidth=1, alpha=0.8, label='Goal Tree' if num == len(edges_start) + 1 else ""
-                )
+            ax.plot(
+                [p1[0], p2[0]], [p1[1], p2[1]],
+                color='orange' if edge[0] in rrt_connect.parent else 'purple',
+                linestyle='-', linewidth=1, alpha=0.8
+            )
 
         # Plot the path if found and at the last frame
         if path is not None and len(path) > 0 and num == total_frames - 1:
@@ -140,7 +128,7 @@ if __name__ == '__main__':
             fontsize=12, color='black', ha='right'
         )
 
-        ax.set_title('RRT-Connect with Obstacles: Animated Search Tree')
+        ax.set_title('RRT-Connect')
         ax.legend(loc='upper left')
         ax.grid(True)
         ax.set_xlim(0, 110)
