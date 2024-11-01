@@ -1,3 +1,4 @@
+import time
 import matplotlib.pyplot as plt
 
 from utils.misc_utils import set_seed
@@ -39,14 +40,29 @@ if __name__ == '__main__':
     )
 
     # Build the roadmap
+    start_time = time.time()
     lazy_prm.construct_roadmap()
+    end_time = time.time()
+    roadmap_construction_time = end_time - start_time
+
+    # Print the roadmap construction time
+    print(f"Roadmap construction time: {roadmap_construction_time:.4f} seconds")
 
     # Define start and goal configurations
     start = (10, 10)
     goal = (90, 90)
 
     # Find a path
+    start_time = time.time()
     path = lazy_prm.query(start, goal)
+    end_time = time.time()
+    query_time = end_time - start_time
+
+    # Print the query time
+    print(f"Query time: {query_time:.4f} seconds")
+
+    # Print the collision count
+    print(f"Collision count: {lazy_prm.collision_check_count} times")
 
     # Visualization
     fig, ax = plt.subplots(figsize=(8, 8))
@@ -60,7 +76,7 @@ if __name__ == '__main__':
     for (u, v) in lazy_prm.roadmap.edges():
         x_values = [u[0], v[0]]
         y_values = [u[1], v[1]]
-        ax.plot(x_values, y_values, color='lightblue', linewidth=0.5)
+        ax.plot(x_values, y_values, color='lightblue', linewidth=2)
 
     # Plot nodes
     nodes_x = [node[0] for node in lazy_prm.nodes]
