@@ -102,11 +102,7 @@ if __name__ == '__main__':
         # Plot edges up to the current frame in expansion order
         for edge in rrt_connect.all_edges[:num]:
             p1, p2 = edge
-            ax.plot(
-                [p1[0], p2[0]], [p1[1], p2[1]],
-                color='orange' if edge[0] in rrt_connect.parent else 'purple',
-                linestyle='-', linewidth=1, alpha=0.8
-            )
+            ax.plot([p1[0], p2[0]], [p1[1], p2[1]], color='orange' if edge[0] in rrt_connect.parent else 'purple',linestyle='-', linewidth=2)
 
         # Plot the path if found and at the last frame
         if path is not None and len(path) > 0 and num == total_frames - 1:

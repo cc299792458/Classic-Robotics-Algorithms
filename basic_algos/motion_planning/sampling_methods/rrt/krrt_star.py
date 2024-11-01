@@ -1,7 +1,7 @@
 import numpy as np
 
 from tqdm import tqdm
-from scipy.spatial import KDTree  # Import KDTree for nearest neighbor search
+from scipy.spatial import KDTree
 from basic_algos.motion_planning.sampling_methods.rrt.rrt import RRT
 
 class kRRTStar(RRT):
