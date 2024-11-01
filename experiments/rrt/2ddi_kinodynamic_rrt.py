@@ -41,7 +41,7 @@ if __name__ == '__main__':
     u_set = [[1, 0], [-1, 0], [0, 1], [0, -1]]
     control_duration = 0.25
     dt = 0.01
-    goal_threshold = 0.25
+    goal_threshold = 0.5
 
     # Initialize dynamics model
     dynamics_model = TwoDimensionalDoubleIntegrator()
@@ -51,7 +51,7 @@ if __name__ == '__main__':
         start=start,
         goal=goal,
         obstacle_free=obstacle_check,
-        max_iters=2000,
+        max_iters=3000,
         state_limits=state_limits,
         u_set=u_set,
         dynamics_model=dynamics_model,
@@ -62,6 +62,14 @@ if __name__ == '__main__':
 
     # Run the Kinodynamic RRT algorithm
     path = rrt.plan()
+
+    # Find the closest node to the goal in the tree
+    closest_node = rrt.nearest(rrt.goal)
+    closest_distance = np.linalg.norm(closest_node[:len(rrt.goal)] - rrt.goal)
+
+    # Print the closest node and its distance to the goal
+    print("Closest node to the goal:", closest_node)
+    print("Distance to the goal:", closest_distance)
 
     # Visualization settings
     animate_plot = False  # Set to False for a static plot

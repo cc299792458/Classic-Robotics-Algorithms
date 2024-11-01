@@ -1,5 +1,6 @@
 import numpy as np
 from tqdm import tqdm
+from scipy.spatial import KDTree
 
 class KinodynamicRRT:
     def __init__(self, start, goal, obstacle_free, max_iters, state_limits, u_set, dynamics_model, control_duration, dt, goal_threshold):
@@ -22,23 +23,30 @@ class KinodynamicRRT:
         self.all_edges = []
         self.num_nodes = 1
 
+        # Compute weights to normalize each dimension to [-1, 1]
+        self.weights = np.array([2 / (limit[1] - limit[0]) for limit in self.state_limits])
+
+        # Initialize KDTree with the start state
+        self.kd_tree = KDTree([self.apply_weights(self.start)])
+
+    def apply_weights(self, state):
+        """Apply weights to normalize the state."""
+        return (state - np.array([limit[0] for limit in self.state_limits])) * self.weights - 1
+
     def sample_state(self, goal_bias=0.1):
         """Randomly sample a state within the state limits or with a goal bias."""
         if np.random.rand() < goal_bias:
             return self.goal
         else:
             return np.array([np.random.uniform(*limit) for limit in self.state_limits])
-        
-    def nearest(self, tree, state, weights=None):
-        """Find the nearest state in the tree to the given state."""
-        weights = np.ones(len(state)) if weights is None else weights
-        distances = [
-            np.linalg.norm((np.array(node) - state) * weights) for node in tree
-        ]
-        nearest_idx = np.argmin(distances)
-        return tree[nearest_idx]
 
-    def propagate(self, state, control, method='euler'):
+    def nearest(self, state):
+        """Find the nearest state in the tree to the given state using KDTree."""
+        weighted_state = self.apply_weights(state)
+        _, nearest_idx = self.kd_tree.query(weighted_state)
+        return self.tree[nearest_idx]
+
+    def steer(self, state, control, method='euler'):
         """
         Propagate the state using the given control over the fixed control duration.
         """
@@ -54,7 +62,7 @@ class KinodynamicRRT:
         """
         for _ in tqdm(range(self.max_iters)):
             x_rand = self.sample_state()
-            x_nearest = self.nearest(self.tree, x_rand)
+            x_nearest = self.nearest(x_rand)
             
             closest_new_node = None
             closest_distance = float('inf')
@@ -62,10 +70,10 @@ class KinodynamicRRT:
             
             # Try all controls and find the closest new node to x_rand
             for control in self.u_set:
-                x_new = self.propagate(x_nearest, control, method=integration_method)
+                x_new = self.steer(x_nearest, control, method=integration_method)
                 
-                if self.obstacle_free(x_nearest, x_new) and not any(np.allclose(x_new, node) for node in self.tree):
-                    distance = np.linalg.norm(x_new[:len(self.goal)] - x_rand)
+                if self.obstacle_free(x_nearest, x_new):
+                    distance = np.linalg.norm(self.apply_weights(x_new) - self.apply_weights(x_rand))
                     
                     if distance < closest_distance:
                         closest_new_node = x_new
@@ -79,9 +87,12 @@ class KinodynamicRRT:
                 self.controls[tuple(closest_new_node)] = closest_control
                 self.all_edges.append((x_nearest, closest_new_node))
                 self.num_nodes += 1
+                
+                # Update KDTree
+                self.kd_tree = KDTree([self.apply_weights(node) for node in self.tree])
 
                 # Check if this new node is within the goal threshold
-                if np.linalg.norm(closest_new_node[:len(self.goal)] - self.goal) <= self.goal_threshold:
+                if np.linalg.norm(closest_new_node - self.goal) <= self.goal_threshold:
                     return self.reconstruct_path(closest_new_node)
                 
         return None
