@@ -32,38 +32,52 @@ def plot_potential_field(ax, X, Y, Z):
     ax.set_ylabel("Y")
     ax.set_zlabel("Potential")
 
-def plot_contour(X, Y, Z, goal, obstacles):
+def plot_contour(X, Y, Z, start, goal, obstacles):
     """
-    Plot contour map of the potential field.
+    Plot contour map of the potential field, including start and goal.
     """
     plt.contour(X, Y, Z, levels=10, cmap="inferno")
+    plt.scatter(start[0], start[1], marker="s", color="green", s=100, label="Start")
     plt.scatter(goal[0], goal[1], marker="*", color="red", s=100, label="Goal")
     for obs in obstacles:
         plt.scatter(obs[0], obs[1], color="blue", s=50)
     plt.title("Potential Field Contour Map")
     plt.legend()
 
-def plot_vector_field(X, Y, Z, goal, obstacles):
+def plot_vector_field(X, Y, Z, start, goal, obstacles):
     """
-    Plot vector field representing the force directions with reduced density.
+    Plot vector field representing the combined force directions from both attractive and repulsive forces,
+    with reduced density and including start and goal.
     """
     X_reduced = X[::5, ::5]
     Y_reduced = Y[::5, ::5]
-    Z_reduced = Z[::5, ::5]
-    grad_x, grad_y = np.gradient(-Z_reduced)
+    force_x = np.zeros_like(X_reduced)
+    force_y = np.zeros_like(Y_reduced)
 
-    plt.quiver(X_reduced, Y_reduced, grad_x, grad_y, color="black", alpha=0.6, scale=100)
+    # Calculate combined forces at each point in the reduced grid
+    for i in range(X_reduced.shape[0]):
+        for j in range(X_reduced.shape[1]):
+            pos = np.array([X_reduced[i, j], Y_reduced[i, j]])
+            f_att = vpf.attractive_force(pos)  # Attractive force towards goal
+            f_rep = vpf.repulsive_force(pos)   # Repulsive force from obstacles
+            total_force = f_att + f_rep        # Combined force
+            force_x[i, j] = total_force[0]
+            force_y[i, j] = total_force[1]
+
+    # Plot the vector field with the combined forces
+    plt.quiver(X_reduced, Y_reduced, force_x, force_y, color="black", alpha=0.6, scale=200)
+    plt.scatter(start[0], start[1], marker="s", color="green", s=100, label="Start")
     plt.scatter(goal[0], goal[1], marker="*", color="red", s=100, label="Goal")
     for obs in obstacles:
         plt.scatter(obs[0], obs[1], color="blue", s=50)
-    plt.title("Force Vector Field")
+    plt.title("Force Vector Field with Combined Forces")
     plt.legend()
 
 if __name__ == '__main__':
-    goal = np.array([8.0, 8.0])
+    goal = np.array([9.0, 9.0])
     obstacles = [np.array([4.0, 2.0]), np.array([5.0, 7.0])]
     obstacle_radii = [1.0, 1.0]
-    start = np.array([0.0, 0.0])
+    start = np.array([1.0, 1.0])
 
     # Initialize and run the VPF algorithm
     vpf = VirtualPotentialField(goal, obstacles, obstacle_radii, max_repulsive_force=10.0)
@@ -93,13 +107,13 @@ if __name__ == '__main__':
     ax2 = fig.add_subplot(2, 2, 2, projection="3d")
     plot_potential_field(ax2, X, Y, Z)
 
-    # Subplot 3: Contour Map
+    # Subplot 3: Contour Map with Start and Goal
     plt.subplot(2, 2, 3)
-    plot_contour(X, Y, Z, goal, obstacles)
+    plot_contour(X, Y, Z, start, goal, obstacles)
 
-    # Subplot 4: Force Vector Field with reduced density and shorter arrows
+    # Subplot 4: Force Vector Field with Combined Forces
     plt.subplot(2, 2, 4)
-    plot_vector_field(X, Y, Z, goal, obstacles)
+    plot_vector_field(X, Y, Z, start, goal, obstacles)
 
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.show()
