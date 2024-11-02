@@ -51,7 +51,7 @@ if __name__ == '__main__':
         start=start,
         goal=goal,
         obstacle_free=obstacle_check,
-        max_iters=10_000,
+        max_iters=1_000,
         state_limits=state_limits,
         u_set=u_set,
         dynamics_model=dynamics_model,
