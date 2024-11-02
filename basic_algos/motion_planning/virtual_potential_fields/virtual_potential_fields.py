@@ -51,7 +51,6 @@ class VirtualPotentialField:
         for obs, radius in zip(self.obstacles, self.obstacle_radii):
             distance = np.linalg.norm(position - obs) - radius  # Effective distance from the obstacle edge
             if distance < self.d_safe:
-                # If within the obstacle's radius, treat repulsive force as infinite (large value)
                 if distance <= 0:
                     distance = 1e-9  # Avoid division by zero, simulate very high repulsive force
                 
@@ -91,7 +90,6 @@ class VirtualPotentialField:
 
             # Check if goal is reached
             if np.linalg.norm(position - self.goal) < 0.1:
-                print("Goal reached!")
                 break
 
         return self.positions

@@ -13,7 +13,7 @@ def plot_path(positions, start, goal, obstacles, obstacle_radii):
     plt.scatter(start[0], start[1], marker="s", color="green", s=100, label="Start")
     plt.scatter(goal[0], goal[1], marker="*", color="red", s=150, label="Goal")
     for obs, radius in zip(obstacles, obstacle_radii):
-        circle = plt.Circle(obs, radius, color="blue", alpha=0.3, edgecolor="black", linewidth=1.5)
+        circle = plt.Circle(obs, radius, facecolor="blue", alpha=0.3, edgecolor="black", linewidth=1.5)
         plt.gca().add_patch(circle)
         plt.scatter(obs[0], obs[1], marker="o", color="blue", s=50)
     plt.xlabel("X")
@@ -36,7 +36,7 @@ def plot_contour(X, Y, Z, goal, obstacles):
     """
     Plot contour map of the potential field.
     """
-    plt.contour(X, Y, Z, levels=20, cmap="inferno")
+    plt.contour(X, Y, Z, levels=10, cmap="inferno")
     plt.scatter(goal[0], goal[1], marker="*", color="red", s=100, label="Goal")
     for obs in obstacles:
         plt.scatter(obs[0], obs[1], color="blue", s=50)
@@ -45,10 +45,14 @@ def plot_contour(X, Y, Z, goal, obstacles):
 
 def plot_vector_field(X, Y, Z, goal, obstacles):
     """
-    Plot vector field representing the force directions.
+    Plot vector field representing the force directions with reduced density.
     """
-    grad_x, grad_y = np.gradient(-Z)
-    plt.quiver(X, Y, grad_x, grad_y, color="black", alpha=0.6, scale=50)
+    X_reduced = X[::5, ::5]
+    Y_reduced = Y[::5, ::5]
+    Z_reduced = Z[::5, ::5]
+    grad_x, grad_y = np.gradient(-Z_reduced)
+
+    plt.quiver(X_reduced, Y_reduced, grad_x, grad_y, color="black", alpha=0.6, scale=100)
     plt.scatter(goal[0], goal[1], marker="*", color="red", s=100, label="Goal")
     for obs in obstacles:
         plt.scatter(obs[0], obs[1], color="blue", s=50)
@@ -61,8 +65,8 @@ if __name__ == '__main__':
     obstacle_radii = [1.0, 1.0]
     start = np.array([0.0, 0.0])
 
-    # Initialize and run the VPF algorithm with a maximum repulsive force limit
-    vpf = VirtualPotentialField(goal, obstacles, obstacle_radii, max_repulsive_force=100.0)
+    # Initialize and run the VPF algorithm
+    vpf = VirtualPotentialField(goal, obstacles, obstacle_radii, max_repulsive_force=10.0)
     path = vpf.plan_path(start)
 
     # Define grid for potential field calculations
@@ -74,13 +78,11 @@ if __name__ == '__main__':
     for obs, radius in zip(obstacles, obstacle_radii):
         dist = np.sqrt((X - obs[0]) ** 2 + (Y - obs[1]) ** 2)
         raw_repulsive = np.where(dist <= vpf.d_safe, 0.5 * vpf.k_rep * (1 / dist - 1 / vpf.d_safe) ** 2, 0)
-        
-        # Apply maximum repulsive force limit
         capped_repulsive = np.clip(raw_repulsive, 0, vpf.max_repulsive_force)
         Z += capped_repulsive
 
     # 4 Subplots in a single figure
-    fig = plt.figure(figsize=(12, 12))
+    fig = plt.figure(figsize=(8, 8))
     plt.suptitle("Virtual Potential Field Visualization", fontsize=16)
 
     # Subplot 1: Path with Obstacles
@@ -95,7 +97,7 @@ if __name__ == '__main__':
     plt.subplot(2, 2, 3)
     plot_contour(X, Y, Z, goal, obstacles)
 
-    # Subplot 4: Force Vector Field
+    # Subplot 4: Force Vector Field with reduced density and shorter arrows
     plt.subplot(2, 2, 4)
     plot_vector_field(X, Y, Z, goal, obstacles)
 
