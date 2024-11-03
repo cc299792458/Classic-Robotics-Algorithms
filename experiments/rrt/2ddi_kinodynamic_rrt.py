@@ -26,8 +26,8 @@ if __name__ == '__main__':
 
     # Define obstacles (list of tuples representing (x, y, width, height))
     obstacles = [
-        (30, 30, 20, 20),  # Obstacle 1
-        (60, 60, 15, 30)   # Obstacle 2
+        (3, 3, 2, 2),  # Obstacle 1
+        (6, 6, 1.5, 3)   # Obstacle 2
     ]
 
     # Define a wrapper function for obstacle checking
@@ -39,7 +39,7 @@ if __name__ == '__main__':
     goal = [8, 8, 0, 0]
     state_limits = ((0, 10), (0, 10), (-2, 2), (-2, 2))
     control_limits = [(-1, 1), (-1, 1)]
-    control_duration = 0.25
+    control_duration = 1.0
     dt = 0.01
     goal_threshold = 0.5
 
@@ -151,6 +151,12 @@ if __name__ == '__main__':
 
     else:
         # Static plot mode
+        # Plot the obstacles
+        for (ox, oy, width, height) in obstacles:
+                ax.add_patch(
+                    plt.Rectangle((ox, oy), width, height, color='gray', alpha=0.8)
+                )
+
         # Plot all nodes
         for node in rrt.tree:
             ax.plot(node[0], node[1], 'o', color='lightblue', markersize=4, alpha=0.5)  # Light blue nodes
