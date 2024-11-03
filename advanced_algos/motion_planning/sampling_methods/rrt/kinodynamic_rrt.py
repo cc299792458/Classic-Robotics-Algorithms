@@ -1,9 +1,10 @@
 import numpy as np
+
 from tqdm import tqdm
 from scipy.spatial import KDTree
 
 class KinodynamicRRT:
-    def __init__(self, start, goal, obstacle_free, max_iters, state_limits, u_set, dynamics_model, control_duration, dt, goal_threshold):
+    def __init__(self, start, goal, obstacle_free, max_iters, state_limits, control_limits, dynamics_model, control_duration, dt, goal_threshold):
         """
         Initialize the Kinodynamic RRT.
         """
@@ -12,7 +13,7 @@ class KinodynamicRRT:
         self.obstacle_free = obstacle_free
         self.max_iters = max_iters
         self.state_limits = state_limits
-        self.u_set = u_set
+        self.control_limits = control_limits  # Control input range
         self.dynamics_model = dynamics_model
         self.control_duration = control_duration
         self.dt = dt
@@ -39,6 +40,10 @@ class KinodynamicRRT:
             return self.goal
         else:
             return np.array([np.random.uniform(*limit) for limit in self.state_limits])
+
+    def sample_controls(self, num_samples=10):
+        """Sample a set of control inputs from the continuous control limits."""
+        return [np.array([np.random.uniform(limit[0], limit[1]) for limit in self.control_limits]) for _ in range(num_samples)]
 
     def nearest(self, state):
         """Find the nearest state in the tree to the given state using KDTree."""
@@ -68,8 +73,11 @@ class KinodynamicRRT:
         closest_distance = float('inf')
         closest_control = None
 
-        # Iterate over all control inputs to find the best expansion towards x_target
-        for control in self.u_set:
+        # Sample control inputs
+        sampled_controls = self.sample_controls()
+
+        # Iterate over all sampled control inputs
+        for control in sampled_controls:
             x_new = self.steer(x_nearest, control, method=integration_method)
 
             if self.obstacle_free(x_nearest, x_new):

@@ -38,7 +38,7 @@ if __name__ == '__main__':
     start = [2, 2, 0, 0]
     goal = [8, 8, 0, 0]
     state_limits = ((0, 10), (0, 10), (-2, 2), (-2, 2))
-    u_set = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+    control_limits = [(-1, 1), (-1, 1)]
     control_duration = 0.25
     dt = 0.01
     goal_threshold = 0.5
@@ -51,9 +51,9 @@ if __name__ == '__main__':
         start=start,
         goal=goal,
         obstacle_free=obstacle_check,
-        max_iters=1_000,
+        max_iters=2_000,
         state_limits=state_limits,
-        u_set=u_set,
+        control_limits=control_limits,
         dynamics_model=dynamics_model,
         control_duration=control_duration,
         dt=dt,
@@ -114,6 +114,10 @@ if __name__ == '__main__':
             ax.scatter(start[0], start[1], color='green', s=100, label='Start')
             ax.scatter(goal[0], goal[1], color='red', s=100, label='Goal')
 
+            # Plot nodes up to the current frame
+            for node in rrt.tree[:num]:  # Only plot nodes up to the current frame
+                ax.plot(node[0], node[1], 'o', color='lightblue', markersize=4, alpha=0.5)  # Light blue nodes
+
             # Plot the edges up to the current frame
             for edge in edges[:num]:
                 p1, p2 = edge
@@ -147,6 +151,10 @@ if __name__ == '__main__':
 
     else:
         # Static plot mode
+        # Plot all nodes
+        for node in rrt.tree:
+            ax.plot(node[0], node[1], 'o', color='lightblue', markersize=4, alpha=0.5)  # Light blue nodes
+
         # Plot all edges
         for edge in edges:
             p1, p2 = edge
