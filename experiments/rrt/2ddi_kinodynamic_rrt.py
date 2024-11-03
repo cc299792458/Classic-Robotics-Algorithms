@@ -39,7 +39,7 @@ if __name__ == '__main__':
     goal = [8, 8, 0, 0]
     state_limits = ((0, 10), (0, 10), (-2, 2), (-2, 2))
     control_limits = [(-1, 1), (-1, 1)]
-    control_duration = 1.0
+    control_duration = 5.0
     dt = 0.01
     goal_threshold = 0.5
 
