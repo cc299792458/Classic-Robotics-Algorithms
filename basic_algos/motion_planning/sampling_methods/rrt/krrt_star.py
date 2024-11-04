@@ -31,6 +31,48 @@ class kRRTStar(RRT):
             nearest_nodes = [self.tree[idx] for idx in nearest_indices]
 
         return nearest_nodes
+    
+    def _compute_cost_to_reach(self, x_nearest, x_new):
+        """Compute cost to reach x_new from x_nearest."""
+        return self.cost[x_nearest] + np.linalg.norm(np.array(x_new) - np.array(x_nearest))
+    
+    def _select_parent(self, c_min, x_min, x_new, k_near_set):
+        """Select the parent node for x_new among k nearest nodes based on minimum cost."""
+        c_min = c_min
+        x_min = x_min
+        for x_near in k_near_set:
+            if self.obstacle_free(x_near, x_new):
+                c = self.cost[x_near] + np.linalg.norm(np.array(x_new) - np.array(x_near))
+                if c < c_min:
+                    c_min = c
+                    x_min = x_near
+        return x_min, c_min
+    
+    def _rewire_tree(self, x_new, x_min, k_near_set):
+        """Rewire the tree to optimize paths in k-nearest neighborhood."""
+        for x_near in k_near_set:
+            if x_near == x_min:
+                continue
+            if self.obstacle_free(x_new, x_near):
+                c = self._compute_cost_to_reach(x_new, x_near)
+                if c < self.cost[x_near]:
+                    # Update parent and cost
+                    old_parent = self.parent[x_near]
+                    self.parent[x_near] = x_new
+                    self.cost[x_near] = c
+                    # Update edge information
+                    self.all_edges.remove((old_parent, x_near))
+                    self.all_edges.append((x_new, x_near))
+
+    def _add_node_to_tree(self, x_new, x_min, c_min):
+        """Add new node to tree, update parent, cost, and KDTree."""
+        self.tree.append(x_new)
+        self.parent[x_new] = x_min
+        self.cost[x_new] = c_min
+        self.all_edges.append((x_min, x_new))
+        self.all_nodes.append(x_new)
+        self.num_nodes += 1
+        self.kd_tree = KDTree(self.tree)  # Rebuild KDTree with new node
 
     def plan(self, show_progress=True):
         """Run the k-RRT* algorithm to find an optimal path from start to goal."""
@@ -41,45 +83,20 @@ class kRRTStar(RRT):
             x_new = self.steer(x_nearest, x_sample)
             if self.obstacle_free(x_nearest, x_new):
                 # Compute the cost to reach x_new via x_nearest
-                c_min = self.cost[x_nearest] + np.linalg.norm(np.array(x_new) - np.array(x_nearest))
+                c_min = self._compute_cost_to_reach(x_nearest=x_nearest, x_new=x_new)
                 x_min = x_nearest
 
                 # Find the k nearest nodes using the KDTree
                 k_near_set = self.find_k_nearest(x_new, self.num_nearest_neighbors)
 
                 # Choose the node that offers the lowest cost to x_new
-                for x_near in k_near_set:
-                    if self.obstacle_free(x_near, x_new):
-                        c = self.cost[x_near] + np.linalg.norm(np.array(x_new) - np.array(x_near))
-                        if c < c_min:
-                            c_min = c
-                            x_min = x_near
+                x_min, c_min = self._select_parent(c_min, x_min, x_new, k_near_set)
 
                 # Add x_new to the tree
-                self.tree.append(x_new)
-                self.parent[x_new] = x_min
-                self.cost[x_new] = c_min
-                self.all_edges.append((x_min, x_new))
-                self.all_nodes.append(x_new)
-                self.num_nodes += 1  # Increment the number of nodes
-
-                # Rebuild the KDTree with the new node
-                self.kd_tree = KDTree(self.tree)
+                self._add_node_to_tree(x_new=x_new, x_min=x_min, c_min=c_min)
 
                 # Rewire the tree
-                for x_near in k_near_set:
-                    if x_near == x_min:
-                        continue
-                    if self.obstacle_free(x_new, x_near):
-                        c = self.cost[x_new] + np.linalg.norm(np.array(x_new) - np.array(x_near))
-                        if c < self.cost[x_near]:
-                            # Update parent and cost
-                            old_parent = self.parent[x_near]
-                            self.parent[x_near] = x_new
-                            self.cost[x_near] = c
-                            # Update edge information
-                            self.all_edges.remove((old_parent, x_near))
-                            self.all_edges.append((x_new, x_near))
+                self._rewire_tree(x_new=x_new, x_min=x_min, k_near_set=k_near_set)
 
                 # Check if the goal has been reached
                 if np.linalg.norm(np.array(x_new) - np.array(self.goal)) <= self.delta_distance:
