@@ -20,12 +20,12 @@ class RRT:
         self.kd_tree = cKDTree([self.start])
 
     def sample(self):
-        """Randomly sample a point within the sampling range."""
-        x_min, x_max = self.sampling_range[0]
-        y_min, y_max = self.sampling_range[1]
-        x = np.random.uniform(x_min, x_max)
-        y = np.random.uniform(y_min, y_max)
-        return (x, y)
+        """Randomly sample a point within the sampling range for any dimension."""
+        sample_point = []
+        for dim_range in self.sampling_range:
+            dim_min, dim_max = dim_range
+            sample_point.append(np.random.uniform(dim_min, dim_max))
+        return tuple(sample_point)
 
     def nearest(self, tree, point, kd_tree):
         """Find the nearest node in the specified tree to the given point using the provided KD Tree."""

@@ -21,31 +21,38 @@ class InformedkRRTStar(kRRTStar):
         Sample a point within the ellipsoidal region defined by the best path length.
         """
         # Compute ellipsoid parameters based on start, goal, and best path length
+        c_max = self.best_path_length
+        c_min = np.linalg.norm(np.array(self.goal) - np.array(self.start))
         center = (np.array(self.start) + np.array(self.goal)) / 2.0
         direction = np.array(self.goal) - np.array(self.start)
-        distance = np.linalg.norm(direction)
 
         # Define axis lengths for the ellipsoid
-        c_min = self.best_path_length / 2.0  # Half of the best path length
-        c_max = np.sqrt(self.best_path_length**2 - distance**2) / 2.0
+        r1 = c_max / 2.0  # Half of the best path length for the main axis
+        rn = np.sqrt(c_max**2 - c_min**2) / 2.0  # Radius of the minor axes
 
-        # Generate a random point within a unit ball in the sampling space dimension
-        random_point = self._sample_unit_ball(len(self.start))
+        while True:  # Repeat until a valid sample within the sampling range is found
+            # Generate a random point within a unit ball in the sampling space dimension
+            random_point = self._sample_unit_ball(len(self.start))
 
-        # Scale and rotate the point to fit within the ellipsoid
-        scaled_point = np.array([c_max * random_point[0]] + [c_min * coord for coord in random_point[1:]])
-        rotation_matrix = self._compute_rotation_matrix(direction)
+            # Scale the random point to fit within the ellipsoid
+            scaled_point = np.array([r1 * random_point[0]] + [rn * coord for coord in random_point[1:]])
 
-        # Apply the rotation and translation to transform the sample into the ellipsoid
-        informed_sample = rotation_matrix.dot(scaled_point) + center
-        return informed_sample
+            # Compute rotation matrix to align the ellipsoid with the direction vector
+            rotation_matrix = self._compute_rotation_matrix(direction)
+
+            # Apply the rotation and translation to transform the sample into the ellipsoid
+            informed_sample = rotation_matrix.dot(scaled_point) + center
+
+            # Check if the informed_sample is within the sampling range
+            if all(self.sampling_range[i][0] <= informed_sample[i] <= self.sampling_range[i][1] for i in range(len(informed_sample))):
+                return tuple(informed_sample)
 
     def _sample_unit_ball(self, dimension):
-        """Generate a random point within a unit ball in the specified dimension."""
-        while True:
-            point = np.random.uniform(-1, 1, dimension)
-            if np.linalg.norm(point) <= 1.0:
-                return point
+        """Generate a random point within a unit ball in the specified dimension using numpy."""
+        point = np.random.normal(size=dimension)  # Generate normally distributed point
+        point /= np.linalg.norm(point)  # Normalize to lie on the unit sphere
+        radius = np.random.uniform(0, 1) ** (1.0 / dimension)  # Uniform radius scaling
+        return point * radius  # Scale to lie within unit ball
 
     def _compute_rotation_matrix(self, direction):
         """
