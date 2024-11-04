@@ -102,18 +102,13 @@ class kRRTStar(RRT):
                 if np.linalg.norm(np.array(x_new) - np.array(self.goal)) <= self.delta_distance:
                     if self.obstacle_free(x_new, self.goal):
                         # Check if the cost via x_new is lower
-                        c = self.cost[x_new] + np.linalg.norm(np.array(self.goal) - np.array(x_new))
-                        if self.goal not in self.cost or c < self.cost[self.goal]:
+                        c_goal = self.cost[x_new] + np.linalg.norm(np.array(self.goal) - np.array(x_new))
+                        if self.goal not in self.cost or c_goal < self.cost[self.goal]:
                             if self.goal in self.parent:
                                 # Remove old connection to goal
                                 old_parent = self.parent[self.goal]
                                 self.all_edges.remove((old_parent, self.goal))
-                            self.tree.append(self.goal)
-                            self.parent[self.goal] = x_new
-                            self.cost[self.goal] = c
-                            self.all_edges.append((x_new, self.goal))
-                            self.all_nodes.append(self.goal)
-                            self.num_nodes += 1  # Increment for goal node
+                            self._add_node_to_tree(self.goal, x_new, c_goal)
 
         # If goal was added to the tree, reconstruct the path
         if self.goal in self.parent:
