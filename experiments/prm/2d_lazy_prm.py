@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 from utils.misc_utils import set_seed
 from utils.math_utils import line_intersects_rect
-from advanced_algos.motion_planning.sampling_methods.prm import LazyPRM
+from advanced_algos.motion_planning.sampling_methods.multi_query import LazyPRM
 
 # Collision checker that uses the above functions
 def collision_checker(p1, p2, obstacles):

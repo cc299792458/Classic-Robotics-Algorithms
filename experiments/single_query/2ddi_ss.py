@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from utils.dynamic_utils import SecondOrderUnicycle
-from advanced_algos.motion_planning.sampling_methods.prm import SS
+from advanced_algos.motion_planning.sampling_methods.single_query import SS
 
 # Configuration space size (3m x 4m), velocity range [0, 0.036], and angle range [0, 2π]
 config_space_width = 3.0

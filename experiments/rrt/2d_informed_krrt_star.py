@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 from utils.misc_utils import set_seed
 from utils.math_utils import line_intersects_rect
-from advanced_algos.motion_planning.sampling_methods.rrt import InformedkRRTStar
+from advanced_algos.motion_planning.sampling_methods.single_query import InformedkRRTStar
 
 def is_obstacle_free(p1, p2, obstacles):
     """Check if the line segment between p1 and p2 is collision-free."""
