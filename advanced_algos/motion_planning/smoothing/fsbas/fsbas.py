@@ -99,48 +99,18 @@ class FSBAS:
         self._generate_initial_time_optimal_trajectory()
 
     def _calculate_segment_time(self, start_state, end_state):
-        times = []
+        t_requireds = []
         for dim in range(len(start_state[0])):
-            delta_pos = end_state[0][dim] - start_state[0][dim]
-            v_start, v_end = start_state[1][dim], end_state[1][dim]
-            
-            t_acc_to_vmax = np.abs(self.vmax[dim] - v_start) / self.amax[dim]
-            dist_acc_to_vmax = v_start * t_acc_to_vmax + 0.5 * self.amax[dim] * t_acc_to_vmax**2
+            t_required = self._univariate_time_optimal_interpolants(
+                start_state[0][dim], 
+                end_state[0][dim], 
+                start_state[1][dim], 
+                end_state[1][dim], 
+                vmax=self.vmax[dim], 
+                amax=self.amax[dim])
+            t_requireds.append(t_required)
 
-            t_dec_from_vmax = np.abs(self.vmax[dim] - v_end) / self.amax[dim]
-            dist_dec_from_vmax = v_end * t_dec_from_vmax + 0.5 * self.amax[dim] * t_dec_from_vmax**2
-
-            if np.abs(delta_pos) <= dist_acc_to_vmax + dist_dec_from_vmax:
-                t_acc = (-v_start + np.sqrt(v_start**2 + 2 * self.amax[dim] * np.abs(delta_pos) / 2)) / self.amax[dim]
-                t_required = t_acc + (v_end - v_start) / self.amax[dim]
-            else:
-                dist_remaining = np.abs(delta_pos) - (dist_acc_to_vmax + dist_dec_from_vmax)
-                t_const = dist_remaining / self.vmax[dim]
-                t_required = t_acc_to_vmax + t_const + t_dec_from_vmax
-
-            times.append(t_required)
-
-        return max(times)
-
-    def _generate_cubic_spline_segment(self, start_state, end_state, segment_time):
-        position_funcs, velocity_funcs = [], []
-
-        for dim in range(len(start_state[0])):
-            spline = CubicSpline(
-                [0, segment_time], 
-                [start_state[0][dim], end_state[0][dim]], 
-                bc_type=((1, start_state[1][dim]), (1, end_state[1][dim]))
-            )
-            position_funcs.append(spline)
-            velocity_funcs.append(spline.derivative())
-
-        def position_func(t):
-            return np.array([f(t) for f in position_funcs])
-
-        def velocity_func(t):
-            return np.array([f(t) for f in velocity_funcs])
-
-        return position_func, velocity_func
+        return max(t_requireds)
 
     def _generate_initial_time_optimal_trajectory(self):
         self.segment_trajectory = []
@@ -149,7 +119,7 @@ class FSBAS:
         for i in range(len(self.path) - 1):
             start_state, end_state = self.path[i], self.path[i + 1]
             segment_time = self._calculate_segment_time(start_state, end_state)
-            position_func, velocity_func = self._generate_cubic_spline_segment(start_state, end_state, segment_time)
+            
             self.segment_trajectory.append((position_func, velocity_func))
             self.segment_time.append(segment_time)
 
