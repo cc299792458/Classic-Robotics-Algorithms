@@ -104,17 +104,17 @@ class FSBAS:
             delta_pos = end_state[0][dim] - start_state[0][dim]
             v_start, v_end = start_state[1][dim], end_state[1][dim]
             
-            t_acc_to_vmax = abs(self.vmax[dim] - v_start) / self.amax[dim]
+            t_acc_to_vmax = np.abs(self.vmax[dim] - v_start) / self.amax[dim]
             dist_acc_to_vmax = v_start * t_acc_to_vmax + 0.5 * self.amax[dim] * t_acc_to_vmax**2
 
-            t_dec_from_vmax = abs(self.vmax[dim] - v_end) / self.amax[dim]
+            t_dec_from_vmax = np.abs(self.vmax[dim] - v_end) / self.amax[dim]
             dist_dec_from_vmax = v_end * t_dec_from_vmax + 0.5 * self.amax[dim] * t_dec_from_vmax**2
 
-            if abs(delta_pos) <= dist_acc_to_vmax + dist_dec_from_vmax:
-                t_acc = (-v_start + np.sqrt(v_start**2 + 2 * self.amax[dim] * abs(delta_pos) / 2)) / self.amax[dim]
+            if np.abs(delta_pos) <= dist_acc_to_vmax + dist_dec_from_vmax:
+                t_acc = (-v_start + np.sqrt(v_start**2 + 2 * self.amax[dim] * np.abs(delta_pos) / 2)) / self.amax[dim]
                 t_required = t_acc + (v_end - v_start) / self.amax[dim]
             else:
-                dist_remaining = abs(delta_pos) - (dist_acc_to_vmax + dist_dec_from_vmax)
+                dist_remaining = np.abs(delta_pos) - (dist_acc_to_vmax + dist_dec_from_vmax)
                 t_const = dist_remaining / self.vmax[dim]
                 t_required = t_acc_to_vmax + t_const + t_dec_from_vmax
 
@@ -158,3 +158,47 @@ class FSBAS:
             if not self.collision_checker(state):
                 return False
         return True
+
+if __name__ == "__main__":
+    """
+    Demo for the FSBAS class:
+    - Create a simple path with two dimensions.
+    - Define maximum velocity and acceleration.
+    - Perform trajectory smoothing and output results.
+    """
+    def collision_checker(state):
+        # Dummy collision checker: always returns True (no collisions)
+        return True
+
+    # Example path: [(position, velocity)] for each waypoint
+    path = [
+        ([0.0, 0.0], [0.0, 0.0]),
+        ([1.0, 2.0], [0.0, 0.0]),
+        ([3.0, 3.0], [0.0, 0.0]),
+        ([4.0, 0.0], [0.0, 0.0])
+    ]
+
+    # Maximum velocity and acceleration for each dimension
+    vmax = [2.0, 2.0]  # [vmax_x, vmax_y]
+    amax = [1.0, 1.0]  # [amax_x, amax_y]
+
+    # Initialize the FSBAS class
+    fsbas = FSBAS(path, vmax, amax, collision_checker, max_iterations=10)
+
+    # Perform smoothing
+    smoothed_path = fsbas.smooth_path()
+
+    # Print the smoothed path
+    print("\nSmoothed Path:")
+    for state in smoothed_path:
+        print(f"Position: {state[0]}, Velocity: {state[1]}")
+
+    # Print the trajectory segment times
+    print("\nSegment Times:")
+    print(fsbas.segment_time)
+
+    # Print an example state at a given time
+    example_time = sum(fsbas.segment_time) / 2  # Midpoint of the total trajectory
+    state_at_example_time = fsbas._get_state_at_time(example_time)
+    print(f"\nState at time {example_time:.2f}:")
+    print(f"Position: {state_at_example_time[0]}, Velocity: {state_at_example_time[1]}")
