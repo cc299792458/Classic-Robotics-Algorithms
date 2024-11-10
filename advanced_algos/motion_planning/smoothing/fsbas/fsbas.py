@@ -5,8 +5,6 @@ This implementation is based on the method presented in the paper:
 
 import numpy as np
 
-from scipy.interpolate import CubicSpline
-
 class FSBAS:
     """
     Fast Smoothing of Manipulator Trajectories using Optimal Bounded-Acceleration Shortcuts.
@@ -48,6 +46,134 @@ class FSBAS:
                 self._update_segment_data(t1, t2, shortcut)
 
         return self.path
+    
+    def _generate_initial_time_optimal_trajectory(self):
+        self.segment_trajectory = []
+        self.segment_time = []
+
+        for i in range(len(self.path) - 1):
+            start_state, end_state = self.path[i], self.path[i + 1]
+            segment_time = self._calculate_segment_time(start_state, end_state)
+            self.segment_time.append(segment_time)
+            segment_trajectory = self._calculate_segment_trajectory(start_state, end_state, segment_time=segment_time)
+            self.segment_trajectory.append(segment_trajectory)
+
+    def _calculate_segment_time(self, start_state, end_state):
+        t_requireds = []
+        for dim in range(len(start_state[0])):
+            t_required = self._univariate_time_optimal_interpolants(
+                start_state[0][dim], 
+                end_state[0][dim], 
+                start_state[1][dim], 
+                end_state[1][dim], 
+                vmax=self.vmax[dim], 
+                amax=self.amax[dim])
+            t_requireds.append(t_required)
+
+        return max(t_requireds)
+    
+    def _calculate_segment_trajectory(self, start_state, end_state, segment_time):
+        trajectorys = []
+        for dim in range(len(start_state[0])):
+            trajectory = self._minimum_acceleration_interpolants(
+                start_state[0][dim],
+                end_state[0][dim], 
+                start_state[1][dim], 
+                end_state[1][dim], 
+                vmax=self.vmax[dim],
+                T=segment_time)
+            trajectorys.append(trajectory)
+
+        return trajectorys
+
+    def _compute_trajectory_state(self, x1, x2, v1, v2, a, vmax, T, trajectory_type, t):
+        """
+        Compute the position x(t) and velocity v(t) for a given trajectory type.
+
+        Input:
+        - x1, x2: Initial and final positions.
+        - v1, v2: Initial and final velocities.
+        - a: Acceleration used in the trajectory.
+        - vmax: Maximum velocity.
+        - T: Total trajectory time.
+        - trajectory_type: One of 'P+P-', 'P-P+', 'P+L+P-', 'P-L-P+'.
+        - t: The time at which to compute the state.
+
+        Return:
+        - x_t: Position at time t.
+        - v_t: Velocity at time t.
+        """
+        if trajectory_type == 'P+P-':
+            # Compute switch time
+            t_s = 0.5 * (T + (v2 - v1) / a)
+            if t <= t_s:  # Acceleration phase
+                v_t = v1 + a * t
+                x_t = x1 + v1 * t + 0.5 * a * t**2
+            else:  # Deceleration phase
+                delta_t = t - t_s
+                v_peak = v1 + a * t_s
+                v_t = v_peak - a * delta_t
+                x_t = (x1 + v1 * t_s + 0.5 * a * t_s**2 +
+                    v_peak * delta_t - 0.5 * a * delta_t**2)
+
+        elif trajectory_type == 'P-P+':
+            # Compute switch time
+            t_s = 0.5 * (T + (v1 - v2) / a)
+            if t <= t_s:  # Deceleration phase
+                v_t = v1 - a * t
+                x_t = x1 + v1 * t - 0.5 * a * t**2
+            else:  # Acceleration phase
+                delta_t = t - t_s
+                v_valley = v1 - a * t_s
+                v_t = v_valley + a * delta_t
+                x_t = (x1 + v1 * t_s - 0.5 * a * t_s**2 +
+                    v_valley * delta_t + 0.5 * a * delta_t**2)
+
+        elif trajectory_type == 'P+L+P-':
+            # Compute durations
+            t_p1 = (vmax - v1) / a
+            t_p2 = (vmax - v2) / a
+            t_l = T - t_p1 - t_p2
+            if t <= t_p1:  # Acceleration phase
+                v_t = v1 + a * t
+                x_t = x1 + v1 * t + 0.5 * a * t**2
+            elif t <= t_p1 + t_l:  # Constant velocity phase
+                delta_t = t - t_p1
+                v_t = vmax
+                x_t = (x1 + v1 * t_p1 + 0.5 * a * t_p1**2 +
+                    vmax * delta_t)
+            else:  # Deceleration phase
+                delta_t = t - t_p1 - t_l
+                v_t = vmax - a * delta_t
+                x_t = (x1 + v1 * t_p1 + 0.5 * a * t_p1**2 +
+                    vmax * t_l +
+                    vmax * delta_t - 0.5 * a * delta_t**2)
+
+        elif trajectory_type == 'P-L-P+':
+            # Compute durations
+            t_p1 = (vmax + v1) / a
+            t_p2 = (vmax + v2) / a
+            t_l = T - t_p1 - t_p2
+            if t <= t_p1:  # Deceleration phase
+                v_t = v1 - a * t
+                x_t = x1 + v1 * t - 0.5 * a * t**2
+            elif t <= t_p1 + t_l:  # Constant negative velocity phase
+                delta_t = t - t_p1
+                v_t = -vmax
+                x_t = (x1 + v1 * t_p1 - 0.5 * a * t_p1**2 +
+                    (-vmax) * delta_t)
+            else:  # Acceleration phase
+                delta_t = t - t_p1 - t_l
+                v_t = -vmax + a * delta_t
+                x_t = (x1 + v1 * t_p1 - 0.5 * a * t_p1**2 +
+                    (-vmax) * t_l +
+                    (-vmax) * delta_t + 0.5 * a * delta_t**2)
+
+        else:
+            raise ValueError(f"Unknown trajectory type: {trajectory_type}")
+
+        return x_t, v_t
+
 
     def _select_random_times(self, total_time):
         """
@@ -97,37 +223,6 @@ class FSBAS:
         self.segment_trajectory.clear()
         self.segment_time.clear()
         self._generate_initial_time_optimal_trajectory()
-
-    def _calculate_segment_time(self, start_state, end_state):
-        t_requireds = []
-        for dim in range(len(start_state[0])):
-            t_required = self._univariate_time_optimal_interpolants(
-                start_state[0][dim], 
-                end_state[0][dim], 
-                start_state[1][dim], 
-                end_state[1][dim], 
-                vmax=self.vmax[dim], 
-                amax=self.amax[dim])
-            t_requireds.append(t_required)
-
-        return max(t_requireds)
-
-    def _generate_initial_time_optimal_trajectory(self):
-        self.segment_trajectory = []
-        self.segment_time = []
-
-        for i in range(len(self.path) - 1):
-            start_state, end_state = self.path[i], self.path[i + 1]
-            segment_time = self._calculate_segment_time(start_state, end_state)
-            
-            self.segment_trajectory.append((position_func, velocity_func))
-            self.segment_time.append(segment_time)
-
-    def _is_collision_free(self, trajectory_segment):
-        for state in trajectory_segment:
-            if not self.collision_checker(state):
-                return False
-        return True
     
     def _univariate_time_optimal_interpolants(self, x1, x2, v1, v2, vmax, amax):
         """
@@ -150,7 +245,7 @@ class FSBAS:
             sqrt_discriminant = np.sqrt(discriminant)
             return [(-b + sqrt_discriminant) / (2 * a), (-b - sqrt_discriminant) / (2 * a)]
         
-        # Class P^+P^-
+        # Class P+P-
         def compute_p_plus_p_minus():
             coefficients = [
                 amax,
@@ -165,7 +260,7 @@ class FSBAS:
             
             return np.array(2 * t_p + (v1 - v2) / amax)
 
-        # Class P^-P^+
+        # Class P-P+
         def compute_p_minus_p_plus():
             coefficients = [
                 amax,
@@ -180,7 +275,7 @@ class FSBAS:
             
             return np.array(2 * t_p + (v2 - v1) / amax)
 
-        # Class P^+L^+P^-
+        # Class P+L+P-
         def compute_p_plus_l_plus_p_minus():
             t_p1 = (vmax - v1) / amax
             t_p2 = (vmax - v2) / amax
@@ -189,7 +284,7 @@ class FSBAS:
                 return None
             return np.array(t_p1 + t_l + t_p2)
 
-        # Class P^-L^+P^+
+        # Class P-L+P+
         def compute_p_minus_l_plus_p_plus():
             t_p1 = (vmax + v1) / amax
             t_p2 = (vmax + v2) / amax
@@ -208,7 +303,7 @@ class FSBAS:
         times = [t for t in [t_p_plus_p_minus, t_p_minus_p_plus, t_p_plus_l_plus_p_minus, t_p_minus_l_plus_p_plus] if t is not None]
         return np.min(times) if times else None
     
-    def _minimum_acceleration_interpolants(x1, x2, v1, v2, vmax, T):
+    def _minimum_acceleration_interpolants(self, x1, x2, v1, v2, vmax, T):
         """
         Compute the minimum-acceleration trajectory for fixed end time T.
 
@@ -220,6 +315,7 @@ class FSBAS:
 
         Return:
         - a_min: Minimal acceleration for valid motion primitive combinations, or None if no valid combination exists.
+        - selected_primitive: Name of the selected motion primitive.
         """
         def solve_quadratic(a, b, c):
             """Solve quadratic equation ax^2 + bx + c = 0 and return real solutions."""
@@ -229,7 +325,7 @@ class FSBAS:
             sqrt_discriminant = np.sqrt(discriminant)
             return [(-b + sqrt_discriminant) / (2 * a), (-b - sqrt_discriminant) / (2 * a)]
 
-        # Class P^+P^-
+        # Class P+P-
         def compute_p_plus_p_minus():
             coefficients = [
                 T**2,
@@ -244,9 +340,9 @@ class FSBAS:
                 t_s = 0.5 * (T + (v2 - v1) / a)
                 if 0 < t_s < T and abs(v1 + a * t_s) <= vmax:
                     valid_a.append(a)
-            return min(valid_a) if valid_a else None
+            return (min(valid_a), 'P+P-') if valid_a else None
 
-        # Class P^-P^+
+        # Class P-P+
         def compute_p_minus_p_plus():
             coefficients = [
                 T**2,
@@ -261,9 +357,9 @@ class FSBAS:
                 t_s = 0.5 * (T + (v1 - v2) / a)
                 if 0 < t_s < T and abs(v1 - a * t_s) <= vmax:
                     valid_a.append(a)
-            return min(valid_a) if valid_a else None
+            return (min(valid_a), 'P-P+') if valid_a else None
 
-        # Class P^+L^+P^-
+        # Class P+L+P-
         def compute_p_plus_l_plus_p_minus():
             a = (vmax**2 - vmax * (v1 + v2) + 0.5 * (v1**2 + v2**2)) / (T * vmax - (x2 - x1))
             if a <= 0:
@@ -273,9 +369,9 @@ class FSBAS:
             t_l = T - t_p1 - t_p2
             if t_p1 < 0 or t_p2 < 0 or t_l < 0:
                 return None
-            return a
+            return (a, 'P+L+P-')
 
-        # Class P^-L^-P^+
+        # Class P-L-P+
         def compute_p_minus_l_minus_p_plus():
             a = (vmax**2 + vmax * (v1 + v2) + 0.5 * (v1**2 + v2**2)) / (T * vmax + (x2 - x1))
             if a <= 0:
@@ -285,18 +381,29 @@ class FSBAS:
             t_l = T - t_p1 - t_p2
             if t_p1 < 0 or t_p2 < 0 or t_l < 0:
                 return None
-            return a
+            return (a, 'P-L-P+')
 
         # Evaluate all four classes independently
         results = [
-            compute_p_plus_p_minus(),  # P^+P^-
-            compute_p_minus_p_plus(),  # P^-P^+
-            compute_p_plus_l_plus_p_minus(),  # P^+L^+P^-
-            compute_p_minus_l_minus_p_plus()  # P^-L^-P^+
+            compute_p_plus_p_minus(),  # P+P-
+            compute_p_minus_p_plus(),  # P-P+
+            compute_p_plus_l_plus_p_minus(),  # P+L+P-
+            compute_p_minus_l_minus_p_plus()  # P-L-P+
         ]
-        valid_results = [a for a in results if a is not None]
+        valid_results = [result for result in results if result is not None]
 
-        return min(valid_results) if valid_results else None
+        if not valid_results:
+            return None, None
+
+        # Find the minimum acceleration and corresponding primitive
+        a_min, selected_primitive = min(valid_results, key=lambda x: x[0])
+        return a_min, selected_primitive
+
+    def _is_collision_free(self, trajectory_segment):
+        for state in trajectory_segment:
+            if not self.collision_checker(state):
+                return False
+        return True
 
 if __name__ == "__main__":
     """
