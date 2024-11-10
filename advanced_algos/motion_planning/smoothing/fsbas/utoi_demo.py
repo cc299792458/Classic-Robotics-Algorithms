@@ -1,5 +1,5 @@
 import numpy as np
-import matplotlib.pyplot as plt  # Added for plotting
+import matplotlib.pyplot as plt
 
 def univariate_time_optimal_interpolants(x1, x2, v1, v2, vmax, amax):
     """
