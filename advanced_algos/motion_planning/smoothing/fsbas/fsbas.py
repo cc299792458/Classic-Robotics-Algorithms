@@ -266,14 +266,16 @@ class FSBAS:
 
         return x_t, v_t
 
-    def _update_segment_data(self, t1, t2, shortcut_time, shortcut_trajectory):
+    def _update_segment_data(self, start_state, end_state, t1, t2, shortcut_time, shortcut_trajectory):
         """
-        Update the trajectory u by replacing the section from t1 to t2 with the shortcut.
+        Update the trajectory and path by replacing the section between t1 and t2 with a shortcut.
+        Also inserts connecting segments to ensure continuity.
 
         Input:
+        - start_state, end_state: States at t1 and t2 respectively.
         - t1, t2: Start and end times of the shortcut in the original trajectory.
         - shortcut_time: Duration of the shortcut segment.
-        - shortcut_trajectory: Trajectory of the shortcut segment.
+        - shortcut_trajectory: Trajectory for the shortcut segment.
         """
         # Step 1: Find the indices of segments affected by t1 and t2
         elapsed_time = 0
@@ -285,28 +287,48 @@ class FSBAS:
                 end_index = i
             elapsed_time += segment_time
 
-        # Step 2: Split the original trajectory into three parts
-        # - Part before t1
-        before_trajectory = self.segment_trajectory[:start_index]
-        before_time = self.segment_time[:start_index]
-        # - Part after t2
-        after_trajectory = self.segment_trajectory[end_index + 1:]
-        after_time = self.segment_time[end_index + 1:]
+        if start_index is None or end_index is None:
+            raise ValueError("Invalid times t1 or t2, cannot find affected segments.")
 
-        # Step 3: Insert the shortcut into the trajectory
-        new_trajectory = before_trajectory + [shortcut_trajectory] + after_trajectory
-        new_time = before_time + [shortcut_time] + after_time
-
-        # Step 4: Update the class attributes
-        self.segment_trajectory = new_trajectory
-        self.segment_time = new_time
-
-        # Update the path to reflect the new shortcut endpoints
+        # Step 2: Update path
+        # Remove nodes between start_index and end_index
         self.path = (
-            self.path[:start_index + 1] +  # Keep unaffected path before t1
-            [self._get_state_at_time(t1)[0], self._get_state_at_time(t2)[0]] +  # Insert shortcut endpoints
-            self.path[end_index + 1:]     # Keep unaffected path after t2
+            self.path[:start_index + 1] +  # Keep nodes before t1
+            [start_state, end_state] +    # Add new shortcut nodes
+            self.path[end_index + 1:]     # Keep nodes after t2
         )
+
+        # Step 3: Update segment_time and segment_trajectory
+        # Remove affected segments
+        before_time = self.segment_time[:start_index]
+        after_time = self.segment_time[end_index + 1:]
+        before_trajectory = self.segment_trajectory[:start_index]
+        after_trajectory = self.segment_trajectory[end_index + 1:]
+
+        # Add new shortcut segment
+        new_time = before_time + [shortcut_time] + after_time
+        new_trajectory = before_trajectory + [shortcut_trajectory] + after_trajectory
+
+        # Step 4: Insert connecting segments to ensure continuity
+        # Insert a new segment before the shortcut if applicable
+        if start_index > 0:
+            prev_state = self.path[start_index]  # Previous node before t1
+            connect_time = self._calculate_segment_time(prev_state, start_state)
+            connect_trajectory = self._calculate_segment_trajectory(prev_state, start_state, connect_time)
+            new_time.insert(start_index, connect_time)
+            new_trajectory.insert(start_index, connect_trajectory)
+
+        # Insert a new segment after the shortcut if applicable
+        if end_index < len(self.path) - 2:
+            next_state = self.path[end_index + 2]  # Next node after t2
+            connect_time = self._calculate_segment_time(end_state, next_state)
+            connect_trajectory = self._calculate_segment_trajectory(end_state, next_state, connect_time)
+            new_time.insert(end_index + 2, connect_time)  # Adjust index for inserted shortcut
+            new_trajectory.insert(end_index + 2, connect_trajectory)
+
+        # Step 5: Update class attributes
+        self.segment_time = new_time
+        self.segment_trajectory = new_trajectory
     
     def _univariate_time_optimal_interpolants(self, start_pos, end_pos, start_vel, end_vel, vmax, amax):
         """
