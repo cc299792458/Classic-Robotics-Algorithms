@@ -4,6 +4,7 @@ This implementation is based on the method presented in the paper:
 """
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 class FSBAS:
     """
@@ -13,35 +14,44 @@ class FSBAS:
     """
     
     def __init__(self, path, vmax, amax, collision_checker, max_iterations=100):
-        self.path = path
+        """
+        Initialize the FSBAS class.
+
+        Parameters:
+        - path: List of waypoints [(position, velocity)].
+        - vmax: Maximum velocity for each dimension.
+        - amax: Maximum acceleration for each dimension.
+        - collision_checker: Function to check for collisions.
+        - max_iterations: Maximum number of shortcut iterations.
+        """
+        self.path = np.array([(np.array(pos), np.array(vel)) for pos, vel in path])  # Convert path to structured np.array
         self.vmax = np.array(vmax)
         self.amax = np.array(amax)
         self.dimension = self.vmax.shape[0]
         self.collision_checker = collision_checker
         self.max_iterations = max_iterations
-        self.segment_trajectory = []  # Store the optimal trajectory functions for each segment
-        self.segment_time = []  # Store the time duration for each segment
+        self.segment_trajectory = []  # List of trajectories for each segment
+        self.segment_time = np.array([])  # Array of time durations for each segment
 
-    def smooth_path(self):
+    def smooth_path(self, plot_trajectory=False):
         """
-        Perform smoothing by first converting milestones into a time-optimal trajectory and 
-        then applying shortcutting. 
+        Smooth the trajectory using time-optimal segments and shortcuts.
 
-        Return:
-        - A smoothed path as a list of waypoints.
+        Returns:
+        - Updated path as a numpy array of waypoints [(position, velocity)].
         """
-        # Generate initial smoothed trajectory using time-optimal segments
         self._generate_initial_trajectory()
-        total_time = sum(self.segment_time)
 
         for _ in range(self.max_iterations):
+            total_time = np.sum(self.segment_time)
+            if plot_trajectory:
+                self.plot_trajectory()
             t1, t2 = self._select_random_times(total_time)
-
             start_state = self._get_state_at_time(t1)
             end_state = self._get_state_at_time(t2)
-            shortcut_time, shortcut_trajectory = self._compute_optimal_shortcut(start_state, end_state)
 
-            if shortcut_trajectory and self._is_segment_collision_free(start_state, end_state, shortcut_time, shortcut_trajectory):
+            shortcut_time, shortcut_trajectory = self._compute_optimal_shortcut(start_state, end_state)
+            if self._is_segment_collision_free(start_state, end_state, shortcut_time, shortcut_trajectory):
                 self._update_segment_data(start_state, end_state, t1, t2, shortcut_time, shortcut_trajectory)
 
         return self.path
@@ -49,24 +59,24 @@ class FSBAS:
     def _generate_initial_trajectory(self):
         """Generate the initial time-optimal trajectory for all segments."""
         self.segment_trajectory = []
-        self.segment_time = []
+        segment_times = []
 
-        for i in range(len(self.path) - 1):
+        for i in range(self.path.shape[0] - 1):
             start_state, end_state = self.path[i], self.path[i + 1]
             segment_time = self._calculate_segment_time(start_state, end_state)
-            self.segment_time.append(segment_time)
+            segment_times.append(segment_time)
 
-            segment_trajectory = self._calculate_segment_trajectory(
-                start_state, end_state, segment_time
-            )
+            segment_trajectory = self._calculate_segment_trajectory(start_state, end_state, segment_time)
             self.segment_trajectory.append(segment_trajectory)
+
+        self.segment_time = np.array(segment_times)
 
     def _calculate_segment_time(self, start_state, end_state):
         """
-        Calculate the time required to traverse a segment between start_state and end_state
-        for each dimension, considering vmax and amax constraints.
+        Calculate the maximum time required to traverse a segment across all dimensions,
+        considering vmax and amax constraints.
         """
-        t_requireds = [
+        t_requireds = np.array([
             self._univariate_time_optimal_interpolants(
                 start_pos=start_state[0][dim],
                 end_pos=end_state[0][dim],
@@ -76,14 +86,15 @@ class FSBAS:
                 amax=self.amax[dim]
             )
             for dim in range(self.dimension)
-        ]
-        return max(t_requireds)
+        ])
+        return np.max(t_requireds)
 
     def _calculate_segment_trajectory(self, start_state, end_state, segment_time):
         """
         Calculate the trajectory for a single segment using minimum acceleration interpolants.
         """
-        return [
+        # Vectorized calculation for all dimensions
+        trajectory_data = [
             self._minimum_acceleration_interpolants(
                 start_pos=start_state[0][dim],
                 end_pos=end_state[0][dim],
@@ -94,6 +105,7 @@ class FSBAS:
             )
             for dim in range(self.dimension)
         ]
+        return np.array(trajectory_data, dtype=object)
     
     def _select_random_times(self, total_time):
         """
@@ -105,9 +117,9 @@ class FSBAS:
         Return:
         - t1, t2: Two random times within the total trajectory duration.
         """
-        t1 = np.random.uniform(0, total_time)
-        t2 = np.random.uniform(0, total_time)
-        return min(t1, t2), max(t1, t2)
+        random_times = np.random.uniform(0, total_time, 2)
+        t1, t2 = np.sort(random_times)
+        return t1, t2
 
     def _get_state_at_time(self, t):
         """
@@ -122,19 +134,26 @@ class FSBAS:
         """
         elapsed_time = 0
 
-        for i, (segment_time, segment_trajectory) in enumerate(zip(self.segment_time, self.segment_trajectory)):
+        for i in range(self.segment_time.shape[0]):  # Use shape[0] since segment_time is a NumPy array
+            segment_time = self.segment_time[i]
             if elapsed_time + segment_time >= t:
-                # Relative time within the segment
+                # Relative time within the current segment
                 relative_t = t - elapsed_time
                 start_state = self.path[i]
                 end_state = self.path[i + 1]
 
-                # Compute position and velocity
-                return self._get_state_in_segment(start_state, end_state, segment_time, segment_trajectory, relative_t)
+                # Compute and return the interpolated state
+                return self._get_state_in_segment(
+                    start_state=start_state,
+                    end_state=end_state,
+                    segment_time=segment_time,
+                    segment_trajectory=self.segment_trajectory[i],
+                    t=relative_t
+                )
 
             elapsed_time += segment_time
 
-        # Return None if time t is beyond the total trajectory duration
+        # If t is beyond the total trajectory duration
         return None
 
     def _get_state_in_segment(self, start_state, end_state, segment_time, segment_trajectory, t):
@@ -152,22 +171,24 @@ class FSBAS:
         - position: Numpy array of positions at time t.
         - velocity: Numpy array of velocities at time t.
         """
-        position, velocity = zip(*[
-            self._compute_trajectory_state(
-                x1=start_state[0][dim],
-                x2=end_state[0][dim],
-                v1=start_state[1][dim],
-                v2=end_state[1][dim],
-                a=acc,
-                vmax=self.vmax[dim],
-                T=segment_time,
-                trajectory_type=trajectory_type,
-                t=t
-            )
-            for dim, (acc, trajectory_type) in enumerate(segment_trajectory)
-        ])
+        position = np.zeros(self.dimension)
+        velocity = np.zeros(self.dimension)
 
-        return np.array(position), np.array(velocity)
+        for dim in range(self.dimension):
+            acc, trajectory_type = segment_trajectory[dim]
+            x1, x2 = start_state[0][dim], end_state[0][dim]
+            v1, v2 = start_state[1][dim], end_state[1][dim]
+
+            pos, vel = self._compute_trajectory_state(
+                x1=x1, x2=x2, v1=v1, v2=v2, a=acc,
+                vmax=self.vmax[dim], T=segment_time,
+                trajectory_type=trajectory_type, t=t
+            )
+            position[dim] = pos
+            velocity[dim] = vel
+
+        return position, velocity
+
     
     def _compute_optimal_shortcut(self, start_state, end_state):
         segment_time = self._calculate_segment_time(start_state, end_state)
@@ -176,7 +197,6 @@ class FSBAS:
             )
         
         return segment_time, segment_trajectory
-
 
     def _compute_trajectory_state(self, x1, x2, v1, v2, a, vmax, T, trajectory_type, t):
         """
@@ -277,7 +297,7 @@ class FSBAS:
         - shortcut_time: Duration of the shortcut segment.
         - shortcut_trajectory: Trajectory for the shortcut segment.
         """
-        # Step 1: Find the indices of segments affected by t1 and t2
+        # Find the indices of segments affected by t1 and t2
         elapsed_time = 0
         start_index, end_index = None, None
         for i, segment_time in enumerate(self.segment_time):
@@ -290,45 +310,38 @@ class FSBAS:
         if start_index is None or end_index is None:
             raise ValueError("Invalid times t1 or t2, cannot find affected segments.")
 
-        # Step 2: Update path
-        # Remove nodes between start_index and end_index
-        self.path = (
-            self.path[:start_index + 1] +  # Keep nodes before t1
-            [start_state, end_state] +    # Add new shortcut nodes
-            self.path[end_index + 1:]     # Keep nodes after t2
-        )
+        # Update path
+        self.path = np.concatenate([
+            self.path[:start_index + 1],
+            [start_state, end_state],
+            self.path[end_index + 1:]
+        ])
 
-        # Step 3: Update segment_time and segment_trajectory
-        # Remove affected segments
+        # Compute the connecting segments
+        prev_state = self.path[start_index]  # Previous node before t1
+        connect_time_before = self._calculate_segment_time(prev_state, start_state)
+        connect_trajectory_before = self._calculate_segment_trajectory(prev_state, start_state, connect_time_before)
+
+        next_state = self.path[end_index + 2]  # Next node after t2
+        connect_time_after = self._calculate_segment_time(end_state, next_state)
+        connect_trajectory_after = self._calculate_segment_trajectory(end_state, next_state, connect_time_after)
+
+        # Update segment_time and segment_trajectory using np.concatenate
         before_time = self.segment_time[:start_index]
         after_time = self.segment_time[end_index + 1:]
+        self.segment_time = np.concatenate([
+            before_time,
+            [connect_time_before, shortcut_time, connect_time_after],
+            after_time
+        ])
+
         before_trajectory = self.segment_trajectory[:start_index]
         after_trajectory = self.segment_trajectory[end_index + 1:]
-
-        # Add new shortcut segment
-        new_time = before_time + [shortcut_time] + after_time
-        new_trajectory = before_trajectory + [shortcut_trajectory] + after_trajectory
-
-        # Step 4: Insert connecting segments to ensure continuity
-        # Insert a new segment before the shortcut if applicable
-        if start_index > 0:
-            prev_state = self.path[start_index]  # Previous node before t1
-            connect_time = self._calculate_segment_time(prev_state, start_state)
-            connect_trajectory = self._calculate_segment_trajectory(prev_state, start_state, connect_time)
-            new_time.insert(start_index, connect_time)
-            new_trajectory.insert(start_index, connect_trajectory)
-
-        # Insert a new segment after the shortcut if applicable
-        if end_index < len(self.path) - 2:
-            next_state = self.path[end_index + 2]  # Next node after t2
-            connect_time = self._calculate_segment_time(end_state, next_state)
-            connect_trajectory = self._calculate_segment_trajectory(end_state, next_state, connect_time)
-            new_time.insert(end_index + 2, connect_time)  # Adjust index for inserted shortcut
-            new_trajectory.insert(end_index + 2, connect_trajectory)
-
-        # Step 5: Update class attributes
-        self.segment_time = new_time
-        self.segment_trajectory = new_trajectory
+        self.segment_trajectory = before_trajectory + [
+            connect_trajectory_before,
+            shortcut_trajectory,
+            connect_trajectory_after
+        ] + after_trajectory
     
     def _univariate_time_optimal_interpolants(self, start_pos, end_pos, start_vel, end_vel, vmax, amax):
         """
@@ -520,48 +533,43 @@ class FSBAS:
             )
             if not self.collision_checker(state):
                 return False
-            return True
-
-if __name__ == "__main__":
-    """
-    Demo for the FSBAS class:
-    - Create a simple path with two dimensions.
-    - Define maximum velocity and acceleration.
-    - Perform trajectory smoothing and output results.
-    """
-    def collision_checker(state):
-        # Dummy collision checker: always returns True (no collisions)
         return True
+    
+    def plot_trajectory(self):
+        """
+        Plot the current trajectory of the FSBAS object in 2D with animation during smoothing.
 
-    # Example path: [(position, velocity)] for each waypoint
-    path = [
-        ([0.0, 0.0], [0.0, 0.0]),
-        ([1.0, 2.0], [0.0, 0.0]),
-        ([3.0, 3.0], [0.0, 0.0]),
-        ([4.0, 0.0], [0.0, 0.0])
-    ]
+        This method dynamically updates the trajectory plot for visualization without creating new windows.
+        """
+        if self.dimension != 2:
+            raise ValueError("This plotting function only supports 2D trajectories.")
 
-    # Maximum velocity and acceleration for each dimension
-    vmax = [2.0, 2.0]  # [vmax_x, vmax_y]
-    amax = [1.0, 1.0]  # [amax_x, amax_y]
+        # Initialize plot only on the first call
+        if not hasattr(self, "_fig"):
+            self._fig, self._ax = plt.subplots(figsize=(8, 6))
+            self._ax.set_xlabel("X")
+            self._ax.set_ylabel("Y")
+            self._ax.set_title("2D Trajectory Smoothing")
+            self._ax.grid(True)
+            self._ax.axis("equal")
 
-    # Initialize the FSBAS class
-    fsbas = FSBAS(path, vmax, amax, collision_checker, max_iterations=10)
+            # Plot the initial trajectory
+            initial_positions = np.array([state[0] for state in self.path])
+            self._ax.plot(initial_positions[:, 0], initial_positions[:, 1], 'r--', label='Initial Trajectory')
 
-    # Perform smoothing
-    smoothed_path = fsbas.smooth_path()
+            # Line for the current smoothed trajectory
+            self._trajectory_line, = self._ax.plot([], [], '-o', markersize=2, label='Smoothed Trajectory')
+            self._ax.legend()
 
-    # Print the smoothed path
-    print("\nSmoothed Path:")
-    for state in smoothed_path:
-        print(f"Position: {state[0]}, Velocity: {state[1]}")
+        # Update the trajectory
+        positions = []
+        times = np.linspace(0, np.sum(self.segment_time), 500)
+        for t in times:
+            state = self._get_state_at_time(t)
+            if state is not None:
+                positions.append(state[0])
 
-    # Print the trajectory segment times
-    print("\nSegment Times:")
-    print(fsbas.segment_time)
-
-    # Print an example state at a given time
-    example_time = sum(fsbas.segment_time) / 2  # Midpoint of the total trajectory
-    state_at_example_time = fsbas._get_state_at_time(example_time)
-    print(f"\nState at time {example_time:.2f}:")
-    print(f"Position: {state_at_example_time[0]}, Velocity: {state_at_example_time[1]}")
+        positions = np.array(positions)
+        self._trajectory_line.set_data(positions[:, 0], positions[:, 1])
+        self._fig.canvas.draw()
+        plt.pause(0.1)
