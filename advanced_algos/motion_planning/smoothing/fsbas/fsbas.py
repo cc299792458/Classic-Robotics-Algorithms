@@ -42,15 +42,15 @@ class FSBAS:
         """
         self._generate_initial_trajectory()
 
-        for _ in range(self.max_iterations):
+        for iteration in range(self.max_iterations):
             total_time = np.sum(self.segment_time)
             if plot_trajectory:
-                self.plot_trajectory()
+                self.plot_trajectory(iteration)
             t1, t2 = self._select_random_times(total_time)
             start_state = self._get_state_at_time(t1)
             end_state = self._get_state_at_time(t2)
 
-            shortcut_time, shortcut_trajectory = self._compute_optimal_shortcut(start_state, end_state)
+            shortcut_time, shortcut_trajectory = self._compute_optimal_segment(start_state, end_state)
             if self._is_segment_collision_free(start_state, end_state, shortcut_time, shortcut_trajectory):
                 self._update_segment_data(start_state, end_state, t1, t2, shortcut_time, shortcut_trajectory)
 
@@ -63,15 +63,13 @@ class FSBAS:
 
         for i in range(self.path.shape[0] - 1):
             start_state, end_state = self.path[i], self.path[i + 1]
-            segment_time = self._calculate_segment_time(start_state, end_state)
+            segment_time, segment_trajectory = self._compute_optimal_segment(start_state, end_state)
             segment_times.append(segment_time)
-
-            segment_trajectory = self._calculate_segment_trajectory(start_state, end_state, segment_time)
             self.segment_trajectory.append(segment_trajectory)
 
         self.segment_time = np.array(segment_times)
 
-    def _calculate_segment_time(self, start_state, end_state):
+    def _calculate_segment_time(self, start_state, end_state, safe_margin=1e-6):
         """
         Calculate the maximum time required to traverse a segment across all dimensions,
         considering vmax and amax constraints.
@@ -87,7 +85,7 @@ class FSBAS:
             )
             for dim in range(self.dimension)
         ])
-        return np.max(t_requireds)
+        return np.max(t_requireds) + safe_margin
 
     def _calculate_segment_trajectory(self, start_state, end_state, segment_time):
         """
@@ -190,7 +188,7 @@ class FSBAS:
         return position, velocity
 
     
-    def _compute_optimal_shortcut(self, start_state, end_state):
+    def _compute_optimal_segment(self, start_state, end_state):
         segment_time = self._calculate_segment_time(start_state, end_state)
         segment_trajectory = self._calculate_segment_trajectory(
                 start_state, end_state, segment_time
@@ -310,21 +308,19 @@ class FSBAS:
         if start_index is None or end_index is None:
             raise ValueError("Invalid times t1 or t2, cannot find affected segments.")
 
+        # Locate the start and end nodes for connection
+        prev_state = self.path[start_index]  # Previous node before t1
+        connect_time_before, connect_trajectory_before = self._compute_optimal_segment(prev_state, start_state)
+
+        next_state = self.path[end_index + 1]  # Next node after t2
+        connect_time_after, connect_trajectory_after = self._compute_optimal_segment(end_state, next_state)
+
         # Update path
         self.path = np.concatenate([
             self.path[:start_index + 1],
             [start_state, end_state],
             self.path[end_index + 1:]
         ])
-
-        # Compute the connecting segments
-        prev_state = self.path[start_index]  # Previous node before t1
-        connect_time_before = self._calculate_segment_time(prev_state, start_state)
-        connect_trajectory_before = self._calculate_segment_trajectory(prev_state, start_state, connect_time_before)
-
-        next_state = self.path[end_index + 2]  # Next node after t2
-        connect_time_after = self._calculate_segment_time(end_state, next_state)
-        connect_trajectory_after = self._calculate_segment_trajectory(end_state, next_state, connect_time_after)
 
         # Update segment_time and segment_trajectory using np.concatenate
         before_time = self.segment_time[:start_index]
@@ -535,11 +531,12 @@ class FSBAS:
                 return False
         return True
     
-    def plot_trajectory(self):
+    def plot_trajectory(self, iteration=None):
         """
         Plot the current trajectory of the FSBAS object in 2D with animation during smoothing.
 
         This method dynamically updates the trajectory plot for visualization without creating new windows.
+        Optionally, displays the current iteration number.
         """
         if self.dimension != 2:
             raise ValueError("This plotting function only supports 2D trajectories.")
@@ -559,6 +556,10 @@ class FSBAS:
 
             # Line for the current smoothed trajectory
             self._trajectory_line, = self._ax.plot([], [], '-o', markersize=2, label='Smoothed Trajectory')
+
+            # Text for iteration number
+            self._iteration_text = self._ax.text(0.02, 0.95, "", transform=self._ax.transAxes, fontsize=12, color="blue")
+
             self._ax.legend()
 
         # Update the trajectory
@@ -571,5 +572,10 @@ class FSBAS:
 
         positions = np.array(positions)
         self._trajectory_line.set_data(positions[:, 0], positions[:, 1])
+
+        # Update iteration text
+        if iteration is not None:
+            self._iteration_text.set_text(f"Iteration: {iteration}")
+
         self._fig.canvas.draw()
         plt.pause(0.1)
