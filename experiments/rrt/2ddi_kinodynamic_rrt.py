@@ -4,7 +4,6 @@ import matplotlib.animation as animation
 
 from utils.misc_utils import set_seed
 from utils.dynamic_utils import TwoDimensionalDoubleIntegrator
-from advanced_algos.motion_planning.smoothing import FSBAS
 from advanced_algos.motion_planning.sampling_methods.single_query import KinodynamicRRT
 
 
