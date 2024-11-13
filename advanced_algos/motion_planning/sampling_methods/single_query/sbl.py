@@ -1,242 +1,105 @@
-class SBL:
-    """
-    A single-query, bi-directional, lazy-collision-checking, kinodynamic planning method.
-    """
-    pass
-
-class ModifiedSBL:
-    """
-    A modified single-query, bi-directional, lazy-collision-checking, kinodynamic planning method.
-    """
-    pass
-
 import numpy as np
 
-from scipy.interpolate import CubicSpline
+from tqdm import tqdm
+from scipy.spatial import KDTree
 
-class SS:
-    """
-    A single-query, single-directional, kinodynamic planning method with time-constrained spline goal connection.
-    """
-
-    def __init__(
-        self,
-        start_state,
-        goal_state,
-        state_space_bounds,
-        control_space_bounds,
-        dynamics,
-        collision_checker,
-        dt=0.1,
-        control_duration_max=1.0,  # Upper limit for the control duration
-        goal_tolerance=0.1,
-        max_spline_time=1.0,  # Maximum allowed spline time
-        bin_resolution=10,  # Default resolution for each dimension
-    ):
+class SBL:
+    def __init__(self, start, goal, obstacle_free, max_iters, state_limits, goal_threshold):
         """
-        Initialize the SS planner for single-directional search with time-constrained spline connection.
-
-        Params:
-        - start_state (np.array): The starting state for the planner.
-        - goal_state (np.array): The goal state for the planner.
-        - state_space_bounds (tuple): A tuple of (lower_bound, upper_bound) representing the state space range (continuous).
-        - control_space_bounds (tuple): A tuple of (lower_bound, upper_bound) representing the control space range (continuous).
-        - dynamics (Dynamics): An instance of a dynamics model that can simulate the system's evolution.
-        - collision_checker (function): A function that checks for collisions between two states.
-        - dt (float): Time step for the simulation of the system's evolution (discrete time approximation).
-        - control_duration_max (float): Maximum allowed duration for which the sampled control input is applied.
-        - goal_tolerance (float): The tolerance distance within which we consider the goal reached.
-        - max_spline_time (float): Maximum allowed time for the spline connection to the goal.
-        - bin_resolution (int): Resolution for binning the state space in each dimension.
+        Initialize the SBL algorithm.
         """
-        self.start_state = start_state
-        self.goal_state = goal_state
-        self.state_space_bounds = state_space_bounds
-        self.control_space_bounds = control_space_bounds
-        self.dynamics = dynamics
-        self.collision_checker = collision_checker
-        self.dt = dt
-        self.control_duration_max = control_duration_max  # Adjusted to randomize within the range [dt, control_duration_max]
-        self.goal_tolerance = goal_tolerance
-        self.max_spline_time = max_spline_time  # Adjusted to 1.0
-        self.bin_resolution = bin_resolution
-        
-        # Tree structure: stores each node with its parent and control input
-        self.tree = {tuple(start_state): (None, None)}  # Initial tree contains only start_state
-        self.bins = self.initialize_bins()  # Initialize bins to store nodes
-        self.solution_path = None
-        self.is_solved = False
+        self.start = np.array(start)
+        self.goal = np.array(goal)
+        self.obstacle_free = obstacle_free
+        self.max_iters = max_iters
+        self.state_limits = state_limits
+        self.goal_threshold = goal_threshold
+        self.tree_a = [self.start]
+        self.tree_b = [self.goal]
+        self.parent_a = {tuple(self.start): None}
+        self.parent_b = {tuple(self.goal): None}
+        self.num_nodes = 2
 
-        # Add start node to the appropriate bin
-        self.add_node_to_bin(start_state)
+        # Compute weights to normalize each dimension to [-1, 1]
+        self.weights = np.array([2 / (limit[1] - limit[0]) for limit in self.state_limits])
 
-    def initialize_bins(self):
+    def apply_weights(self, state):
+        """Apply weights to normalize the state."""
+        return (state - np.array([limit[0] for limit in self.state_limits])) * self.weights - 1
+
+    def sample_state(self):
+        """Randomly sample a state within the state limits."""
+        return np.array([np.random.uniform(*limit) for limit in self.state_limits])
+
+    def nearest(self, tree, state):
+        """Find the nearest state in the tree to the given state."""
+        kd_tree = KDTree([self.apply_weights(node) for node in tree])
+        _, nearest_idx = kd_tree.query(self.apply_weights(state))
+        return tree[nearest_idx]
+
+    def connect(self, x_nearest, x_new, tree, parent_dict):
         """
-        Initialize bins for dividing the state space. The number of bins in each dimension is determined
-        by the dimensionality of the state space.
-
-        Returns:
-        - list of lists: A list of bins to store nodes.
+        Attempt to connect x_new to x_nearest in the given tree.
+        If successful, add x_new to the tree and update parent_dict.
         """
-        state_dimension = len(self.start_state)
-        # Create a multi-dimensional array (list of lists) to store bins based on state space dimensions
-        bins = np.empty([self.bin_resolution] * state_dimension, dtype=object)
-        for idx in np.ndindex(bins.shape):
-            bins[idx] = []
-        return bins
+        if self.obstacle_free(x_nearest, x_new):
+            tree.append(x_new)
+            parent_dict[tuple(x_new)] = tuple(x_nearest)
+            return True
+        return False
 
-    def add_node_to_bin(self, state):
+    def attempt_connection(self, tree_a, tree_b, parent_a, parent_b):
         """
-        Add a node to the appropriate bin based on its state.
-
-        Params:
-        - state (np.array): The state of the node to add to the bin.
-
-        Returns:
-        - None
+        Attempt to connect tree_a and tree_b.
         """
-        bin_index = self.get_bin_index(state)
-        self.bins[bin_index].append(tuple(state))
+        for x_a in tree_a:
+            for x_b in tree_b:
+                if self.obstacle_free(x_a, x_b):
+                    # Connect two trees and return the path
+                    return self.reconstruct_path(x_a, x_b, parent_a, parent_b)
+        return None
 
-    def get_bin_index(self, state):
-        """
-        Get the bin index for a given state.
+    def reconstruct_path(self, x_a, x_b, parent_a, parent_b):
+        """Reconstruct the path connecting the two trees."""
+        path_a = []
+        state = tuple(x_a)
+        while state is not None:
+            path_a.append(np.array(state))
+            state = parent_a.get(state)
+        path_a.reverse()
 
-        Params:
-        - state (np.array): The state to find the bin index for.
+        path_b = []
+        state = tuple(x_b)
+        while state is not None:
+            path_b.append(np.array(state))
+            state = parent_b.get(state)
 
-        Returns:
-        - tuple: The bin index corresponding to the state.
-        """
-        lower_bound_state, upper_bound_state = self.state_space_bounds
-        # Normalize state to a range [0, 1] within the state space bounds
-        normalized_state = (state - lower_bound_state) / (upper_bound_state - lower_bound_state)
-        # Scale the normalized state to the number of bins
-        bin_index = tuple((normalized_state * self.bin_resolution).astype(int).clip(0, self.bin_resolution - 1))
-        return bin_index
-
-    def get_random_node(self):
-        """
-        Return a random node from the tree by sampling a bin first, then sampling a node in the bin.
-
-        Returns:
-        - np.array: A random node from the tree.
-        """
-        # Step 1: Randomly sample a non-empty bin
-        non_empty_bins = [bin_idx for bin_idx in np.ndindex(self.bins.shape) if len(self.bins[bin_idx]) > 0]
-        random_bin_idx = non_empty_bins[np.random.randint(len(non_empty_bins))]
-
-        # Step 2: Randomly sample a node from the selected bin
-        random_node = self.bins[random_bin_idx][np.random.randint(len(self.bins[random_bin_idx]))]
-        return np.array(random_node)
+        return path_a + path_b
 
     def plan(self):
         """
-        Perform the single-directional kinodynamic planning.
+        Execute the SBL planning algorithm.
         """
-        while not self.is_solved:
-            # Expand the tree in the forward direction
-            self.expand()
+        for _ in tqdm(range(self.max_iters)):
+            # Sample a random state
+            x_rand = self.sample_state()
 
-            # Try to connect the last node to the goal using spline connection
-            if self.connect_to_goal(self.get_last_node()):
-                self.construct_solution()
-                return self.solution_path
+            # Extend tree A toward x_rand
+            x_nearest_a = self.nearest(self.tree_a, x_rand)
+            if self.connect(x_nearest_a, x_rand, self.tree_a, self.parent_a):
+                # Try to connect tree B to the new node in tree A
+                x_new_a = x_rand
+                path = self.attempt_connection(self.tree_a, self.tree_b, self.parent_a, self.parent_b)
+                if path:
+                    return path
 
-        return self.solution_path
+            # Extend tree B toward x_rand
+            x_nearest_b = self.nearest(self.tree_b, x_rand)
+            if self.connect(x_nearest_b, x_rand, self.tree_b, self.parent_b):
+                # Try to connect tree A to the new node in tree B
+                x_new_b = x_rand
+                path = self.attempt_connection(self.tree_b, self.tree_a, self.parent_b, self.parent_a)
+                if path:
+                    return path
 
-    def expand(self):
-        """
-        Expand the tree in the forward direction.
-
-        Returns:
-        - None: This function modifies the internal tree based on the expansion.
-        """
-        # Step 1: Select a random node from the tree
-        current_node = self.get_random_node()
-
-        # Step 2: Sample a random control input from the continuous control space
-        lower_bound_control, upper_bound_control = self.control_space_bounds
-        control_input = np.random.uniform(lower_bound_control, upper_bound_control)
-
-        # Step 3: Randomly sample a control duration between dt and control_duration_max
-        control_duration = np.random.uniform(self.dt, self.control_duration_max)
-
-        # Step 4: Simulate the system's evolution over the sampled duration control_duration
-        new_state = np.copy(current_node)
-        t = 0
-        while t < control_duration:
-            new_state = self.dynamics.step(new_state, control_input, self.dt)
-            # Ensure the new state is within the state space bounds
-            lower_bound_state, upper_bound_state = self.state_space_bounds
-            new_state = np.clip(new_state, lower_bound_state, upper_bound_state)
-            t += self.dt
-
-        # Step 5: After control_duration, perform collision checking between the start and end states
-        if not self.collision_checker(current_node, new_state):
-            # Step 6: If no collision occurs, add the new state to the tree with its parent and control input
-            self.tree[tuple(new_state)] = (tuple(current_node), control_input)
-            self.add_node_to_bin(new_state)
-
-    def connect_to_goal(self, state):
-        """
-        Try to connect the current state to the goal using a time-constrained cubic spline. 
-        Time for the spline connection is also sampled from [dt, max_spline_time].
-
-        Params:
-        - state (np.array): The current state of the system.
-
-        Returns:
-        - bool: True if the spline connection to the goal is collision-free, False otherwise.
-        """
-        # Sample a random spline duration between dt and max_spline_time
-        spline_time = np.random.uniform(self.dt, self.max_spline_time)
-
-        # Generate a cubic spline connecting the current state to the goal over the sampled spline time
-        spline_time_points = [0, spline_time]  # Start at 0, end at the sampled spline time
-        spline = CubicSpline(spline_time_points, np.vstack([state, self.goal_state]), axis=0)
-
-        # Discretize the spline path based on time
-        num_points = 20  # Number of points to sample along the spline
-        time_samples = np.linspace(0, spline_time, num_points)
-
-        for t in time_samples:
-            interpolated_state = spline(t)
-            if self.collision_checker(state, interpolated_state):
-                return False  # Collision detected along the spline path
-
-        # If no collision, we successfully connected to the goal
-        self.tree[tuple(self.goal_state)] = (tuple(state), None)  # No control input needed for final connection
-        return True
-
-    def construct_solution(self):
-        """
-        Construct the solution path once the goal is reached.
-
-        Returns:
-        - None: Modifies self.solution_path with the states and controls leading to the goal.
-        """
-        # Trace back from goal to start, collecting states and controls
-        path = []
-        controls = []
-        current_state = tuple(self.goal_state)
-        
-        while current_state is not None:
-            parent_state, control_input = self.tree[current_state]
-            path.append(np.array(current_state))  # Add current state to path
-            if control_input is not None:
-                controls.append(control_input)  # Add control input to controls
-            current_state = parent_state
-        
-        path.reverse()  # Reverse the path to start from the initial state
-        controls.reverse()
-        self.solution_path = (path, controls)
-
-    def get_last_node(self):
-        """
-        Return the last added node to the tree.
-
-        Returns:
-        - np.array: The last added node in the tree.
-        """
-        return np.array(list(self.tree.keys())[-1])
+        return None  # Return None if no path is found within max_iters
