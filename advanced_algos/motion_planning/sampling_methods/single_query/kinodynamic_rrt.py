@@ -56,10 +56,21 @@ class KinodynamicRRT:
         Propagate the state using the given control over the fixed control duration.
         """
         num_steps = int(self.control_duration / self.dt)
-        new_state = state
+        new_state = np.array(state)  # Ensure we work with a numpy array
         for _ in range(num_steps):
             new_state = self.dynamics_model.step(new_state, control, self.dt, method)
+            if not self.is_within_limits(new_state):
+                return None  # Return None if the state goes out of bounds
         return new_state
+    
+    def is_within_limits(self, state):
+        """
+        Check if a state is within the defined state limits.
+        """
+        for i, limit in enumerate(self.state_limits):
+            if not (limit[0] <= state[i] <= limit[1]):
+                return False
+        return True
     
     def expand(self, x_nearest, x_target, integration_method='euler'):
         """
@@ -79,6 +90,8 @@ class KinodynamicRRT:
         # Iterate over all sampled control inputs
         for control in sampled_controls:
             x_new = self.steer(x_nearest, control, method=integration_method)
+            if x_new is None:  # Skip invalid states
+                continue
 
             if self.obstacle_free(x_nearest, x_new):
                 distance = np.linalg.norm(self.apply_weights(x_new) - self.apply_weights(x_target))
