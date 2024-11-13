@@ -5,6 +5,8 @@
     - Perform trajectory smoothing and plot the results.
 """
 
+import numpy as np
+
 from utils.misc_utils import set_seed
 from advanced_algos.motion_planning.smoothing import FSBAS
 
@@ -15,12 +17,12 @@ def collision_checker(state):
 if __name__ == '__main__':
     set_seed()
 
-    path = [
+    path = np.array([
         ([0.0, 0.0], [0.0, 0.0]),
         ([1.0, 2.0], [0.0, 0.0]),
         ([3.0, 3.0], [0.0, 0.0]),
         ([4.0, 0.0], [0.0, 0.0]),
-    ]
+    ])
 
     vmax = [2.0, 2.0]  # [vmax_x, vmax_y]
     amax = [1.0, 1.0]  # [amax_x, amax_y]

@@ -18,13 +18,13 @@ class FSBAS:
         Initialize the FSBAS class.
 
         Parameters:
-        - path: List of waypoints [(position, velocity)].
+        - path: List of waypoints np.array([position, velocity])
         - vmax: Maximum velocity for each dimension.
         - amax: Maximum acceleration for each dimension.
         - collision_checker: Function to check for collisions.
         - max_iterations: Maximum number of shortcut iterations.
         """
-        self.path = np.array([(np.array(pos), np.array(vel)) for pos, vel in path])  # Convert path to structured np.array
+        self.path = path
         self.vmax = np.array(vmax)
         self.amax = np.array(amax)
         self.dimension = self.vmax.shape[0]

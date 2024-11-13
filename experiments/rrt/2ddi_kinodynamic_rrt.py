@@ -4,7 +4,15 @@ import matplotlib.animation as animation
 
 from utils.misc_utils import set_seed
 from utils.dynamic_utils import TwoDimensionalDoubleIntegrator
+from advanced_algos.motion_planning.smoothing import FSBAS
 from advanced_algos.motion_planning.sampling_methods.single_query import KinodynamicRRT
+
+def collision_checker(state, obstacles):
+    x, y = state[:2]
+    for (ox, oy, width, height) in obstacles:
+        if ox <= x <= ox + width and oy <= y <= oy + height:
+            return False
+    return True
 
 def is_obstacle_free_trajectory(state1, state2, obstacles):
     """
@@ -174,3 +182,9 @@ if __name__ == '__main__':
         ax.set_title('Kinodynamic RRT')
         ax.legend(loc='upper left')
         plt.show()
+
+        path = np.array(path).reshape(-1, 2, 2)
+        vmax = np.array([2, 2])
+        amax = np.array([1, 1])
+        fsbas = FSBAS(path=path, vmax=vmax, amax=amax, collision_checker=collision_checker, max_iterations=10)
+        fsbas.smooth_path(plot_trajectory=True)
