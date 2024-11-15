@@ -1,8 +1,27 @@
+import random
 import numpy as np
 import matplotlib.pyplot as plt
 
 from scipy.spatial import KDTree
 from advanced_algos.motion_planning.smoothing import FSBAS
+
+class Node:
+    def __init__(self, state, index, parent_index=None, segment_time=None, trajectory_info=None):
+        """
+        Initialize a Node object.
+
+        Args:
+            state (np.ndarray): The state of the node as a concatenated position and velocity vector.
+            index (int or None): Index of the node in the tree.
+            parent_index (int or None): Index of the parent node in the tree.
+            segment_time (float or None): Time duration of the segment connecting to the parent.
+            trajectory_info (object or None): Trajectory information for the segment connecting to the parent.
+        """
+        self.state = state
+        self.index = index
+        self.parent_index = parent_index
+        self.segment_time = segment_time
+        self.trajectory_info = trajectory_info
 
 class RampPlanner:
     def __init__(self, start, goal, max_iters, collision_checker, position_limits, vmax, amax):
@@ -25,35 +44,21 @@ class RampPlanner:
             amax (np.ndarray): Maximum acceleration magnitudes for each dimension.
                                 Shape: (n_dimensions,)
         """
-        self.start = np.array(start, dtype=float)
-        self.goal = np.array(goal, dtype=float)
+        # Initialize forward and backward trees using Node class
+        self.forward_tree = [Node(state=start, index=0)]
+        self.backward_tree = [Node(state=goal, index=0)]
+
         self.max_iters = max_iters
         self.collision_checker = collision_checker
-        self.position_limits = position_limits  # (min_pos, max_pos)
+        self.position_limits = position_limits
         self.vmax = np.array(vmax, dtype=float)
         self.amax = np.array(amax, dtype=float)
         self.dimension = self.vmax.shape[0]
 
-        # Initialize weights for weighted euclidean distance calculation
         self.init_weights()
 
-        # Initialize forward and backward trees
-        # Each tree consists of a list of states and a corresponding list of parent indices
-        self.forward_tree = [self.start]
-        self.forward_parents = [-1]  # -1 indicates no parent (root node)
-        self.forward_segment_time = [None]
-        self.forward_trajectory = [None]
-
-        self.backward_tree = [self.goal]
-        self.backward_parents = [-1]  # -1 indicates no parent (root node)
-        self.backward_segment_time = [None]
-        self.backward_trajectory = [None]
-
-        # Store the final planned path
-        self.path = None
-
-        # Visualize or not
         self.visualization = False
+        self.path = None
 
     def init_weights(self):
         # Compute weights based on position and velocity limits
@@ -82,30 +87,37 @@ class RampPlanner:
 
             self.fig, self.ax = plt.subplots(figsize=(8, 8))
             self._initialize_plot()
-    
+
         # Seed the trees with maximum braking trajectories
         self.seed_trees()
 
+        # Define forward and backward trees for alternating extension
+        trees = [
+            (self.forward_tree, self.backward_tree),
+            (self.backward_tree, self.forward_tree),
+        ]
+
         # Main planning loop
-        for _ in range(self.max_iters):
-            # Extend the forward tree
-            self.extend_tree(self.forward_tree, self.forward_parents, self.forward_segment_time, self.forward_trajectory)
+        for i in range(self.max_iters):
+            # Select current tree and its counterpart
+            current_tree, other_tree = trees[i % 2]
 
-            # Extend the backward tree
-            self.extend_tree(self.backward_tree, self.backward_parents, self.backward_segment_time, self.backward_trajectory)
+            # Extend the selected tree
+            extended_node = self.extend_tree(current_tree)
 
-            # Check if the trees can be connected
-            path = self.connect_trees()
-            if path:
-                # Verify the trajectory is collision-free
-                infeasible_edge = self.check_path_collision(path)
-                if infeasible_edge is None:
-                    # Apply path smoothing
-                    smoothed_path = self.shortcut_path(path)
-                    self.path = smoothed_path
-                    return smoothed_path
-                else:
-                    self.remove_infeasible_edge(infeasible_edge)
+            if extended_node is not None:
+                # Check if the extended node can connect to the other tree
+                path = self.connect_trees(other_tree, extended_node)
+                if path is not None:
+                    # Verify the trajectory is collision-free
+                    infeasible_edge = self.check_path_collision(path)
+                    if infeasible_edge is None:
+                        # Apply path smoothing and return the final path
+                        smoothed_path = self.shortcut_path(path)
+                        self.path = smoothed_path
+                        return [node.state for node in smoothed_path]
+                    else:
+                        self.remove_infeasible_edge(infeasible_edge)
 
         # Return None if no path is found within the maximum iterations
         return None
@@ -114,29 +126,30 @@ class RampPlanner:
         """
         Seed the forward and backward trees with maximum braking trajectories.
         """
-        # Generate and add maximum braking trajectory to forward tree
-        final_state, segment_time, trajectory_info = self.generate_max_braking_trajectory(self.start)
-        if final_state is not None:
-            nearby_nodes, _ = self._find_nearby_nodes(self.forward_tree, final_state, epsilon=1e-2)
-            if nearby_nodes == []:
-                self.forward_tree.append(final_state)
-                self.forward_parents.append(len(self.forward_tree) - 2)  # Parent is the last node before adding
-                if self.visualization:
-                    self.forward_segment_time.append(segment_time)
-                    self.forward_trajectory.append(trajectory_info)
-                    self._update_plot()
+        for tree, root_state in [
+            (self.forward_tree, self.forward_tree[0].state),
+            (self.backward_tree, self.backward_tree[0].state),
+        ]:
+            # Generate maximum braking trajectory from the root state
+            final_state, segment_time, trajectory_info = self.generate_max_braking_trajectory(root_state)
 
-        # Generate and add maximum reverse-braking trajectory to backward tree
-        final_state, segment_time, trajectory_info = self.generate_max_braking_trajectory(self.goal)
-        if final_state is not None:
-            nearby_nodes, _ = self._find_nearby_nodes(self.backward_tree, final_state, epsilon=1e-2)
-            if nearby_nodes == []:
-                self.backward_tree.append(final_state)
-                self.backward_parents.append(len(self.backward_tree) - 2)  # Parent is the last node before adding
-                if self.visualization:
-                    self.backward_segment_time.append(segment_time)
-                    self.backward_trajectory.append(trajectory_info)
-                    self._update_plot()
+            if final_state is not None:
+                # Check if there's already a nearby node
+                nearby_nodes, _ = self._find_nearby_nodes(tree, final_state, epsilon=1e-2)
+                if nearby_nodes == []:
+                    # Create a new node and append it to the tree
+                    new_node = Node(
+                        state=final_state,
+                        index=len(tree),
+                        parent_index=0,  # Root node index
+                        segment_time=segment_time,
+                        trajectory_info=trajectory_info,
+                    )
+                    tree.append(new_node)
+
+                    # Update visualization
+                    if self.visualization:
+                        self._update_plot()
 
     def generate_max_braking_trajectory(self, state):
         """
@@ -203,65 +216,72 @@ class RampPlanner:
 
         return final_state, t_max, trajectory_info
 
-    def extend_tree(self, tree, parents, segment_times, trajectories):
+    def extend_tree(self, tree):
         """
-        Extend the given tree by sampling and connecting states, without checking connections.
+        Extend the given tree by sampling and connecting states.
 
         Args:
-            tree (list of np.ndarray): The tree to extend, containing states as concatenated position and velocity vectors.
-            parents (list of int): List of parent indices corresponding to each state in the tree.
-            segment_times (List of float): List of time duration corresponding to each segment.
-            trajectories (list of tuple): List of trajectory information regarding to each segment.
+            tree (list of Node): The tree to extend, containing Node objects.
 
         Returns:
-            None
+            Node or None: The newly added node if successful, else None.
         """
-        # Sample a state from the tree
-        sampled_node = self._sample_tree_state(tree)
+
+        # Sample a Node from the tree
+        sampled_node = random.choice(tree)
 
         # Sample a random state from free space
         random_state = self._sample_free_space_state()
 
         # Check collision for the sampled random state
         if not self.collision_checker(random_state):
-            return  # Collision detected, skip this extension
+            return None  # Collision detected, skip this extension
 
-        # Add the new state to the tree
-        tree.append(random_state)
+        # Compute the segment time and trajectory
+        segment_time, trajectory_info = self._compute_optimal_segment(
+            sampled_node.state.reshape(2, self.dimension),
+            random_state.reshape(2, self.dimension)
+        )
 
-        # Find the index of the sampled node in the tree
-        parent_index = next((i for i, node in enumerate(tree) if np.array_equal(node, sampled_node)), None)
-        if parent_index is None:
-            raise ValueError("Sampled node not found in tree.")
+        # Create a new Node
+        new_node = Node(
+            state=random_state,
+            index=len(tree),
+            parent_index=sampled_node.index,
+            segment_time=segment_time,
+            trajectory_info=trajectory_info,
+        )
 
-        parents.append(parent_index)  # Record the parent index
+        # Append the new node to the tree
+        tree.append(new_node)
 
-        # Compute segment time and trajectory if visualization is enabled
+        # Update the plot if visualization is enabled
         if self.visualization:
-            segment_time, trajectory = self._compute_optimal_segment(
-                sampled_node.reshape(2, 2), random_state.reshape(2, 2)
-            )
-            segment_times.append(segment_time)
-            trajectories.append(trajectory)
-
-            # Update the plot with the current state of the trees and the trajectory
             self._update_plot()
 
-    def connect_trees(self):
+        return new_node
+
+    def connect_trees(self, tree, node, epsilon=0.1):
         """
-        Check if the forward and backward trees can be connected.
+        Attempt to connect a given node to a tree.
+
+        Args:
+            tree (list of np.ndarray): The tree to connect to.
+            node (np.ndarray): The node from one the other tree.
 
         Returns:
             list of np.ndarray or None: Combined trajectory if connection is found, else None.
         """
-        # To be implemented
-        return False
+        # Find the nearest node in the tree
+        return None
+        nearest_node, nearest_index, distance = self._find_nearest_node(tree, node)
 
-    def check_path_collision(self):
-        pass
+        if distance > epsilon:
+            return None
+        
+        self._construct_path()
 
-    def check_edge_collision(self):
-        pass
+        return path
 
     def shortcut_path(self):
         pass
@@ -311,35 +331,68 @@ class RampPlanner:
         diff = state_from - state_to  # Difference between the two states
         return np.sqrt(np.sum(self.weights * diff**2))  # Weighted Euclidean distance
     
-    def _find_nearby_nodes(self, tree, target_node, epsilon):
+    def _find_nearby_nodes(self, tree, target_node_state, epsilon):
         """
-        Find all nodes in the tree that are within a given distance threshold using KDTree.
+        Find all nodes in the tree that are within a given weighted distance threshold using KDTree.
 
         Args:
-            tree (list of np.ndarray): The tree containing existing nodes.
-            target_node (np.ndarray): The target node to check against.
+            tree (list of Node): The tree containing Node objects.
+            target_node_state (np.ndarray): The target node state to check against.
             epsilon (float): Distance threshold to consider nodes as "nearby".
 
         Returns:
-            list of np.ndarray: List of nodes within the distance threshold.
+            list of Node: List of Node objects within the distance threshold.
             list of int: Indices of these nodes in the tree.
         """
-        kdtree = KDTree(tree)
-        nearby_indices = kdtree.query_ball_point(target_node, r=epsilon)
-        nearby_nodes = [tree[i] for i in nearby_indices]
-        return nearby_nodes, nearby_indices
+        # Extract states from the Node objects in the tree
+        tree_states = np.array([node.state for node in tree])
+        
+        # Apply weights to the tree states and target node state
+        weighted_tree_states = tree_states * np.sqrt(self.weights)
+        weighted_target_node_state = target_node_state * np.sqrt(self.weights)
 
-    def _sample_tree_state(self, tree):
+        # Build a KDTree with the weighted states
+        kdtree = KDTree(weighted_tree_states)
+
+        # Query for nearby nodes within the weighted distance threshold
+        nearby_indices = kdtree.query_ball_point(weighted_target_node_state, r=epsilon)
+
+        # Retrieve the Node objects from the tree
+        nearby_nodes = [tree[i] for i in nearby_indices]
+
+        return nearby_nodes, nearby_indices
+    
+    def _find_nearest_node(self, tree, target_node_state):
         """
-        Randomly sample a state from the given tree.
+        Find the nearest node in the tree to the target node using weighted distance.
 
         Args:
-            tree (list of np.ndarray): The tree containing existing states.
+            tree (list of Node): The tree containing Node objects.
+            target_node_state (np.ndarray): The target node state to check against.
 
         Returns:
-            np.ndarray: A randomly sampled state from the tree.
+            tuple:
+                - nearest_node (Node): The nearest Node object in the tree.
+                - nearest_index (int): The index of the nearest node in the tree.
+                - distance (float): The weighted distance to the nearest node.
         """
-        return tree[np.random.randint(len(tree))]  # Uniformly sample a state from the tree
+        # Extract states from the Node objects in the tree
+        tree_states = np.array([node.state for node in tree])
+        
+        # Apply weights to the tree states and target node state
+        weighted_tree_states = tree_states * np.sqrt(self.weights)
+        weighted_target_node_state = target_node_state * np.sqrt(self.weights)
+
+        # Build a KDTree for efficient nearest neighbor search
+        kdtree = KDTree(weighted_tree_states)
+
+        # Query the KDTree for the nearest neighbor
+        distance, nearest_index = kdtree.query(weighted_target_node_state)
+
+        # Retrieve the nearest Node object from the tree
+        nearest_node = tree[nearest_index]
+
+        return nearest_node, nearest_index, distance
     
     def _sample_free_space_state(self):
         """
@@ -359,6 +412,35 @@ class RampPlanner:
         # Concatenate position and velocity
         return np.concatenate([random_position, zero_velocity])
     
+    def _construct_path(tree, node_index):
+        """
+        Construct a path by tracing back from a given node to the root.
+
+        Args:
+            tree (list of Node): The tree containing Node objects.
+            node_index (int): The index of the node to start tracing back.
+
+        Returns:
+            list of Node: Path as a list of Node objects, ordered from root to the given node.
+        """
+        path = []
+        current_node = tree[node_index]
+
+        # Trace back to the root
+        while current_node is not None:
+            path.append(current_node)
+            current_node = tree[current_node.parent_index] if current_node.parent_index is not None else None
+
+        # Reverse the path to go from root to node_index
+        path.reverse()
+        return path
+    
+    def _check_path_collision(self):
+        pass
+
+    def _check_edge_collision(self):
+        pass
+
     ############### Visualization ###############
     def _initialize_plot(self):
         """
@@ -372,10 +454,16 @@ class RampPlanner:
         self.ax.set_ylabel("Position Y")
 
         # Draw start and goal
-        self.ax.scatter(self.start[0], self.start[1], c='green', label="Start")
-        self._draw_velocity_arrow(self.start[:2], self.start[2:], 'green')  # Start velocity
-        self.ax.scatter(self.goal[0], self.goal[1], c='red', label="Goal")
-        self._draw_velocity_arrow(self.goal[:2], self.goal[2:], 'red')     # Goal velocity
+        start_node = self.forward_tree[0]  # Start node is the root of the forward tree
+        goal_node = self.backward_tree[0]  # Goal node is the root of the backward tree
+
+        # Draw start node
+        self.ax.scatter(start_node.state[0], start_node.state[1], c='green', label="Start")
+        self._draw_velocity_arrow(start_node.state[:2], start_node.state[2:], 'green')  # Start velocity
+
+        # Draw goal node
+        self.ax.scatter(goal_node.state[0], goal_node.state[1], c='red', label="Goal")
+        self._draw_velocity_arrow(goal_node.state[:2], goal_node.state[2:], 'red')  # Goal velocity
 
         # Add obstacles if provided
         if self.visualization_args and "obstacles" in self.visualization_args:
@@ -385,7 +473,7 @@ class RampPlanner:
         self.ax.legend()
 
         plt.show(block=False)
-        plt.pause(0.25)    
+        plt.pause(0.25)
 
     def _draw_velocity_arrow(self, position, velocity, color):
         """
@@ -412,59 +500,98 @@ class RampPlanner:
 
     def _update_plot(self):
         """
-        Update the plot to visualize the current state of the trees.
+        Dynamically update the plot by adding new edges, removing invalid edges,
+        and updating nodes without clearing the entire canvas.
         """
-        # Clear the current axis
-        self.ax.clear()
+        # Initialize edge dictionary if not already done
+        if not hasattr(self, "edges"):
+            self.edges = {"forward": {}, "backward": {}}  # Track edges for forward and backward trees
 
-        # Redraw the basic elements
-        self._initialize_plot()
+        # Update edges and nodes for each tree
+        for tree_type, tree, color in [
+            ("forward", self.forward_tree, 'g'),
+            ("backward", self.backward_tree, 'r'),
+        ]:
+            # Set of currently valid edges in the tree (use frozenset for undirected edges)
+            current_edges = set()
 
-        # Draw forward tree nodes and edges
-        for i, (state, parent_index) in enumerate(zip(self.forward_tree, self.forward_parents)):
-            if parent_index == -1:  # Skip the root node
-                continue
+            for node in tree:
+                if node.parent_index is None:  # Skip root node
+                    continue
 
-            pos, vel = state[:2], state[2:]
-            self.ax.plot(pos[0], pos[1], 'go', markersize=3, label="Forward Tree" if i == 1 else None)  # Nodes
-            self._draw_velocity_arrow(position=pos, velocity=vel, color='green')
+                # Draw the node and velocity arrow
+                self._draw_node(node, color, tree_type)
 
-            # Draw edges
-            parent_state = self.forward_tree[parent_index]
-            segment_time = self.forward_segment_time[i]
-            trajectory_info = self.forward_trajectory[i]
-            self._draw_trajecotry_segment(parent_state, state, segment_time=segment_time, trajectory_info=trajectory_info, color='g-')
-            
-        # Draw backward tree nodes and edges
-        for i, (state, parent_index) in enumerate(zip(self.backward_tree, self.backward_parents)):
-            if parent_index == -1:  # Skip the root node
-                continue
+                # Get parent node
+                parent_node = tree[node.parent_index]
 
-            pos, vel = state[:2], state[2:]
-            self.ax.plot(pos[0], pos[1], 'ro', markersize=3, label="Backward Tree" if i == 1 else None)  # Nodes
-            self._draw_velocity_arrow(position=pos, velocity=vel, color='red')
+                # Generate a unique key for the edge (undirected)
+                edge_key = frozenset({node.parent_index, node.index})
+                current_edges.add(edge_key)
 
-            # Draw edges
-            parent_state = self.backward_tree[parent_index]
-            segment_time = self.backward_segment_time[i]
-            trajectory_info = self.backward_trajectory[i]
-            self._draw_trajecotry_segment(parent_state, state, segment_time=segment_time, trajectory_info=trajectory_info, color='r-')
+                # Check if the edge needs to be added
+                if edge_key not in self.edges[tree_type]:
+                    # New edge, draw it
+                    if node.segment_time is not None and node.trajectory_info is not None:
+                        line_obj = self._draw_edge(
+                            parent_node, node, color=f'{color}-'
+                        )
+                        self.edges[tree_type][edge_key] = line_obj  # Save the Line2D object
 
-        # Add legend if not too cluttered
-        handles, labels = self.ax.get_legend_handles_labels()
-        if len(labels) <= 10:
-            self.ax.legend(loc="upper right")
+            # Remove edges that are no longer valid in the tree
+            invalid_edges = set(self.edges[tree_type].keys()) - current_edges
+            for edge_key in invalid_edges:
+                # Remove the Line2D object from the canvas
+                self.edges[tree_type][edge_key].remove()
+                # Delete from edge tracking dictionary
+                del self.edges[tree_type][edge_key]
+
+        # Add legend if not already added
+        if not hasattr(self, "_legend_added") or not self._legend_added:
+            handles, labels = self.ax.get_legend_handles_labels()
+            if len(labels) <= 10:
+                self.ax.legend(loc="upper right")
+            self._legend_added = True  # Mark that the legend has been added
 
         plt.show(block=False)
         plt.pause(0.25)
 
-    def _draw_trajecotry_segment(self, state_from, state_to, segment_time, trajectory_info, color):
+    def _draw_node(self, node, color, tree_type):
+        """
+        Plot a node and its velocity arrow.
+
+        Args:
+            node (Node): The node to plot.
+            color (str): The color for the node and arrow.
+            tree_type (str): The type of the tree ('forward' or 'backward') for legend labeling.
+        """
+        pos, vel = node.state[:2], node.state[2:]
+        self.ax.plot(pos[0], pos[1], f'{color}o', markersize=3,
+                    label=f"{tree_type.capitalize()} Tree" if node.index == 1 else None)
+        self._draw_velocity_arrow(position=pos, velocity=vel, color=color)
+
+    def _draw_edge(self, from_node, to_node, color):
+        """
+        Draw the trajectory segment connecting two nodes.
+
+        Args:
+            from_node (Node): The starting node of the trajectory.
+            to_node (Node): The ending node of the trajectory.
+            color (str): The color for the trajectory line.
+        """
+        if to_node.segment_time is None or to_node.trajectory_info is None:
+            return  # Skip if trajectory info is missing
+
         positions, velocities = [], []
-        times = np.linspace(0, np.sum(segment_time), 10)
+        times = np.linspace(0, np.sum(to_node.segment_time), 10)  # Time steps for visualization
+
         for t in times:
             state = self._get_state_in_segment(
-                start_state=state_from.reshape(2, 2), end_state=state_to.reshape(2, 2), 
-                segment_time=segment_time, segment_trajectory=trajectory_info, t=t
+                start_state=from_node.state.reshape(2, 2),
+                end_state=to_node.state.reshape(2, 2),
+                segment_time=to_node.segment_time,
+                segment_trajectory=to_node.trajectory_info,
+                t=t
             )
             positions.append(state[0])
             velocities.append(state[1])
