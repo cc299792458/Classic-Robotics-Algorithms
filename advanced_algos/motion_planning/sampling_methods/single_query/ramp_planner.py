@@ -95,18 +95,17 @@ class RampPlanner:
             self.extend_tree(self.backward_tree, self.backward_parents, self.backward_segment_time, self.backward_trajectory)
 
             # Check if the trees can be connected
-            path = self.check_for_connection()
+            path = self.connect_trees()
             if path:
                 # Verify the trajectory is collision-free
-                if self.check_collision(path):
+                infeasible_edge = self.check_path_collision(path)
+                if infeasible_edge is None:
                     # Apply path smoothing
                     smoothed_path = self.shortcut_path(path)
                     self.path = smoothed_path
                     return smoothed_path
                 else:
-                    # Remove infeasible edges from both trees
-                    # Implementation depends on how infeasibility is detected
-                    pass
+                    self.remove_infeasible_edge(infeasible_edge)
 
         # Return None if no path is found within the maximum iterations
         return None
@@ -217,27 +216,38 @@ class RampPlanner:
         Returns:
             None
         """
-        # Step 1: Sample a state from the tree
+        # Sample a state from the tree
         sampled_node = self._sample_tree_state(tree)
 
-        # Step 2: Sample a random state from free space
+        # Sample a random state from free space
         random_state = self._sample_free_space_state()
 
-        # Step 3: Check collision for the sampled random state
+        # Check collision for the sampled random state
         if not self.collision_checker(random_state):
             return  # Collision detected, skip this extension
 
-        # Step 4: Add the new state to the tree
+        # Add the new state to the tree
         tree.append(random_state)
-        parents.append(tree.index(sampled_node))  # Record the parent index
 
+        # Find the index of the sampled node in the tree
+        parent_index = next((i for i, node in enumerate(tree) if np.array_equal(node, sampled_node)), None)
+        if parent_index is None:
+            raise ValueError("Sampled node not found in tree.")
+
+        parents.append(parent_index)  # Record the parent index
+
+        # Compute segment time and trajectory if visualization is enabled
         if self.visualization:
-            segment_time, trajectory = self._compute_optimal_segment(sampled_node.reshape(2, 2), random_state.reshape(2, 2))
+            segment_time, trajectory = self._compute_optimal_segment(
+                sampled_node.reshape(2, 2), random_state.reshape(2, 2)
+            )
             segment_times.append(segment_time)
             trajectories.append(trajectory)
+
+            # Update the plot with the current state of the trees and the trajectory
             self._update_plot()
 
-    def check_for_connection(self):
+    def connect_trees(self):
         """
         Check if the forward and backward trees can be connected.
 
@@ -247,18 +257,13 @@ class RampPlanner:
         # To be implemented
         return False
 
-    def _combine_trajectories(self, f_index, b_index):
-        """
-        Combine forward and backward trajectories to form a complete path.
+    def check_path_collision(self):
+        pass
 
-        Args:
-            f_index (int): Index of the connecting node in the forward tree.
-            b_index (int): Index of the connecting node in the backward tree.
+    def check_edge_collision(self):
+        pass
 
-        Returns:
-            list of np.ndarray: Combined trajectory as a list of concatenated position and velocity vectors.
-        """
-        # To be implemented
+    def shortcut_path(self):
         pass
 
     def remove_infeasible_edge(self, tree, child_index):
