@@ -6,18 +6,21 @@ from scipy.spatial import KDTree
 from advanced_algos.motion_planning.smoothing import FSBAS
 
 class Node:
-    def __init__(self, state, index, parent_index=None, segment_time=None, trajectory_info=None):
+    def __init__(self, state, tree_type, index, parent_index=None, segment_time=None, trajectory_info=None):
         """
-        Initialize a Node object.
+        Initialize a Node.
 
         Args:
-            state (np.ndarray): The state of the node as a concatenated position and velocity vector.
-            index (int or None): Index of the node in the tree.
-            parent_index (int or None): Index of the parent node in the tree.
-            segment_time (float or None): Time duration of the segment connecting to the parent.
-            trajectory_info (object or None): Trajectory information for the segment connecting to the parent.
+            state (np.ndarray): The state of the node.
+            tree_type (str): The type of the tree ('forward' or 'backward') to which this node belongs.
+            index (int): The index of the current node in the tree.
+            parent (int): The index of the parent node in the tree.
+            segment_time (float): The time required to traverse the segment leading to this node.
+            trajectory_info (object): Trajectory-related information for this node.
         """
         self.state = state
+        assert tree_type == 'forward' or tree_type == 'backward'
+        self.tree_type = tree_type
         self.index = index
         self.parent_index = parent_index
         self.segment_time = segment_time
@@ -45,8 +48,8 @@ class RampPlanner:
                                 Shape: (n_dimensions,)
         """
         # Initialize forward and backward trees using Node class
-        self.forward_tree = [Node(state=start, index=0)]
-        self.backward_tree = [Node(state=goal, index=0)]
+        self.forward_tree = [Node(state=start, tree_type='forward', index=0)]
+        self.backward_tree = [Node(state=goal, tree_type='backward', index=0)]
 
         self.max_iters = max_iters
         self.collision_checker = collision_checker
@@ -107,17 +110,20 @@ class RampPlanner:
 
             if extended_node is not None:
                 # Check if the extended node can connect to the other tree
-                path = self.connect_trees(other_tree, extended_node)
-                if path is not None:
-                    # Verify the trajectory is collision-free
-                    infeasible_edge = self.check_path_collision(path)
-                    if infeasible_edge is None:
+                paths = self.connect_trees(other_tree, extended_node)
+                if paths is not None:
+                    # Check for collisions and connect paths if collision-free
+                    result = self._check_paths_collision(paths)
+                    if isinstance(result, list):  # If the result is the connected path
                         # Apply path smoothing and return the final path
-                        smoothed_path = self.shortcut_path(path)
+                        smoothed_path = self.shortcut_path(result)
                         self.path = smoothed_path
+
+                        # Return the smoothed path as a list of states
                         return [node.state for node in smoothed_path]
                     else:
-                        self.remove_infeasible_edge(infeasible_edge)
+                        # Handle the infeasible result (could be an edge or other issue)
+                        self.remove_infeasible_edge(result)
 
         # Return None if no path is found within the maximum iterations
         return None
@@ -126,9 +132,9 @@ class RampPlanner:
         """
         Seed the forward and backward trees with maximum braking trajectories.
         """
-        for tree, root_state in [
-            (self.forward_tree, self.forward_tree[0].state),
-            (self.backward_tree, self.backward_tree[0].state),
+        for tree, root_state, tree_type in [
+            (self.forward_tree, self.forward_tree[0].state, 'forward'),
+            (self.backward_tree, self.backward_tree[0].state, 'backward'),
         ]:
             # Generate maximum braking trajectory from the root state
             final_state, segment_time, trajectory_info = self.generate_max_braking_trajectory(root_state)
@@ -140,6 +146,7 @@ class RampPlanner:
                     # Create a new node and append it to the tree
                     new_node = Node(
                         state=final_state,
+                        tree_type=tree_type,
                         index=len(tree),
                         parent_index=0,  # Root node index
                         segment_time=segment_time,
@@ -246,6 +253,7 @@ class RampPlanner:
         # Create a new Node
         new_node = Node(
             state=random_state,
+            tree_type=sampled_node.tree_type,
             index=len(tree),
             parent_index=sampled_node.index,
             segment_time=segment_time,
@@ -266,39 +274,80 @@ class RampPlanner:
         Attempt to connect a given node to a tree.
 
         Args:
-            tree (list of np.ndarray): The tree to connect to.
-            node (np.ndarray): The node from one the other tree.
+            tree (list of Node): The tree to connect to.
+            node (Node): The node from the other tree.
 
         Returns:
-            list of np.ndarray or None: Combined trajectory if connection is found, else None.
+            list of list[Node] or None: Two paths (from root to the connecting node in each tree)
+                                        if connection is found, else None.
         """
-        # Find the nearest node in the tree
-        return None
-        nearest_node, nearest_index, distance = self._find_nearest_node(tree, node)
+        nearest_node, _, distance = self._find_nearest_node(tree, node)
 
         if distance > epsilon:
             return None
-        
-        self._construct_path()
 
-        return path
+        # Construct paths for both trees
+        path1 = self._construct_path(nearest_node)
+        path2 = self._construct_path(node)
+
+        paths = [path1, path2]
+
+        return paths
 
     def shortcut_path(self):
         pass
 
-    def remove_infeasible_edge(self, tree, child_index):
+    def remove_infeasible_edge(self, infeasible_edge):
         """
         Remove the infeasible edge from the tree.
 
         Args:
-            tree (list of np.ndarray): The tree from which to remove the edge.
-            child_index (int): Index of the child node to remove.
+            infeasible_edge (tuple): A tuple (start_node, end_node) representing the edge to be removed.
 
         Returns:
             None
         """
-        # To be implemented
-        pass
+        start_node, end_node, bridge_start_node, bridge_end_node = infeasible_edge  # Unpack the tuple
+
+        # Case 1: If the edge is a bridge, do nothing
+        if start_node.tree_type != end_node.tree_type:
+            # The edge is a bridge; no reconfiguration is needed
+            return
+
+        # Case 2: The edge is internal to a single tree
+        tree = self.forward_tree if start_node.tree_type == 'forward' else self.backward_tree
+
+        # Determine the bridge node belonging to the same tree as end_node
+        if bridge_start_node.tree_type == end_node.tree_type:
+            bridge_in_same_tree = bridge_start_node
+            bridge_in_other_tree = bridge_end_node
+        else:
+            bridge_in_same_tree = bridge_end_node
+            bridge_in_other_tree = bridge_start_node
+
+        # Start reconfiguring from the bridge node in the same tree
+        current_node = bridge_in_same_tree
+        new_parent_node = bridge_in_other_tree  # The initial new parent node from the other tree
+
+        while current_node.index != start_node.index:
+            # Record the current parent node
+            old_parent_index = current_node.parent_index
+
+            # Update current node's parent to the new parent node
+            current_node.parent_index = new_parent_node.index
+            current_node.tree_type = new_parent_node.tree_type
+            segment_time, trajectory_info = self._compute_optimal_segment(
+                new_parent_node.state.reshape(2, self.dimension), current_node.state.reshape(2, self.dimension))
+            current_node.segment_time = segment_time
+            current_node.trajectory_info = trajectory_info
+
+            # Move to the old parent node
+            current_node = tree[old_parent_index]
+
+            # Update the new parent node for the next iteration
+            new_parent_node = current_node
+        
+        self._update_plot()
 
     def _check_state_limits(self, state):
         """
@@ -362,13 +411,13 @@ class RampPlanner:
 
         return nearby_nodes, nearby_indices
     
-    def _find_nearest_node(self, tree, target_node_state):
+    def _find_nearest_node(self, tree, target_node):
         """
         Find the nearest node in the tree to the target node using weighted distance.
 
         Args:
             tree (list of Node): The tree containing Node objects.
-            target_node_state (np.ndarray): The target node state to check against.
+            target_node (Node): The target node to check against.
 
         Returns:
             tuple:
@@ -378,7 +427,8 @@ class RampPlanner:
         """
         # Extract states from the Node objects in the tree
         tree_states = np.array([node.state for node in tree])
-        
+        target_node_state = target_node.state
+
         # Apply weights to the tree states and target node state
         weighted_tree_states = tree_states * np.sqrt(self.weights)
         weighted_target_node_state = target_node_state * np.sqrt(self.weights)
@@ -412,34 +462,153 @@ class RampPlanner:
         # Concatenate position and velocity
         return np.concatenate([random_position, zero_velocity])
     
-    def _construct_path(tree, node_index):
+    def _construct_path(self, node):
         """
         Construct a path by tracing back from a given node to the root.
 
         Args:
-            tree (list of Node): The tree containing Node objects.
-            node_index (int): The index of the node to start tracing back.
+            node (Node): The node to start tracing back from.
 
         Returns:
             list of Node: Path as a list of Node objects, ordered from root to the given node.
         """
         path = []
-        current_node = tree[node_index]
+        current_node = node
 
         # Trace back to the root
         while current_node is not None:
             path.append(current_node)
-            current_node = tree[current_node.parent_index] if current_node.parent_index is not None else None
+            if current_node.parent_index is not None:
+                # Determine the tree type to find the parent node
+                parent_tree = self.forward_tree if current_node.tree_type == 'forward' else self.backward_tree
+                current_node = parent_tree[current_node.parent_index]
+            else:
+                current_node = None
 
-        # Reverse the path to go from root to node_index
+        # Reverse the path to go from root to the given node
         path.reverse()
+
         return path
     
-    def _check_path_collision(self):
-        pass
+    def _connect_paths(self, paths):
+        """
+        Connect two paths into a single path from start_node to end_node.
 
-    def _check_edge_collision(self):
-        pass
+        Args:
+            paths (list of list of Node): Two paths, where one starts with start_node
+                                        and the other starts with end_node.
+
+        Returns:
+            list of Node: Combined path from start_node to end_node.
+        """
+        path1, path2 = paths
+
+        # Identify the path starting from start_node and the one starting from end_node
+        if path1[0].tree_type == "forward" and path2[0].tree_type == "backward":
+            # Reverse the path starting with end_node (backward tree)
+            path2 = path2[::-1]
+        elif path2[0].tree_type == "forward" and path1[0].tree_type == "backward":
+            # Reverse the path starting with end_node (backward tree)
+            path1 = path1[::-1]
+        else:
+            raise ValueError("Invalid paths: Unable to determine start and end nodes.")
+
+        # Combine paths
+        combined_path = path1 + path2
+
+        return combined_path
+    
+    def _check_paths_collision(self, paths):
+        """
+        Internal method to check collisions for two paths and the connecting bridge.
+
+        Args:
+            paths (list of list[Node]): Two paths [path1, path2] as lists of Node objects.
+
+        Returns:
+            tuple or list[Node]:
+                - (collision_segment_start, collision_segment_end): If a collision occurs.
+                - list of Node: Full combined path if no collision occurs.
+        """
+        path1, path2 = paths
+
+        bridge_start, bridge_end = path1[-1], path2[-1]  # Extract bridge nodes
+
+        # Check collision for path1
+        result = self._check_path_collision(path1)
+        if result is not None:
+            return (*result, bridge_start, bridge_end)  # Add bridge nodes for context
+
+        # Check collision for path2
+        result = self._check_path_collision(path2)
+        if result is not None:
+            return (*result, bridge_start, bridge_end)  # Add bridge nodes for context
+
+        # Check collision for the bridge
+        segment_time, trajectory_info = self._compute_optimal_segment(
+            bridge_start.state.reshape(2, self.dimension),
+            bridge_end.state.reshape(2, self.dimension)
+        )
+        if not self._check_edge_collision(bridge_start, bridge_end, segment_time, trajectory_info):
+            return (bridge_start, bridge_end, bridge_start, bridge_end)  # Treat as bridge collision
+
+        # If no collision, return the full path
+        path = self._connect_paths(paths)
+
+        return path
+    
+    def _check_path_collision(self, path):
+        """
+        Check if a given path has any collision. Assume the path is begin from the root (start or goal) to the leaf
+
+        Args:
+            path (list of Node): A path represented as a list of Node objects.
+
+        Returns:
+            tuple or None:
+                - (collision_segment_start, collision_segment_end): Start and end nodes of the colliding segment.
+                - None if the path is collision-free.
+        """
+        for i in range(len(path) - 1):
+            start_node, end_node = path[i], path[i + 1]
+            if not self._check_edge_collision(
+                start_node, end_node, end_node.segment_time, end_node.trajectory_info
+            ):
+                return (start_node, end_node)  # Return the colliding segment
+        return None  # Path is collision-free
+
+    def _check_edge_collision(self, start_node, end_node, segment_time, trajectory_info, time_step=0.01):
+        """
+        Check if a single edge (segment) has a collision.
+
+        Args:
+            start_node (Node): The starting node of the segment.
+            end_node (Node): The ending node of the segment.
+            segment_time (float): Duration of the segment.
+            trajectory_info (object): Trajectory-related information for the segment.
+            time_step (float): Time step for sampling along the trajectory.
+
+        Returns:
+            bool: True if the edge is collision-free, False otherwise.
+        """
+        # Generate time points to sample along the trajectory
+        num_samples = int(segment_time / time_step) + 1
+        times = np.linspace(0, segment_time, num_samples)
+
+        # Check each sampled point
+        for t in times:
+            position, velocity = self._get_state_in_segment(
+                start_state=start_node.state.reshape(2, self.dimension),
+                end_state=end_node.state.reshape(2, self.dimension),
+                segment_time=segment_time,
+                segment_trajectory=trajectory_info,
+                t=t,
+            )
+            # Collision check at this position
+            if not self.collision_checker(position):
+                return False  # Collision detected
+
+        return True  # No collision along the segment
 
     ############### Visualization ###############
     def _initialize_plot(self):
@@ -587,8 +756,8 @@ class RampPlanner:
 
         for t in times:
             state = self._get_state_in_segment(
-                start_state=from_node.state.reshape(2, 2),
-                end_state=to_node.state.reshape(2, 2),
+                start_state=from_node.state.reshape(2, self.dimension),
+                end_state=to_node.state.reshape(2, self.dimension),
                 segment_time=to_node.segment_time,
                 segment_trajectory=to_node.trajectory_info,
                 t=t
