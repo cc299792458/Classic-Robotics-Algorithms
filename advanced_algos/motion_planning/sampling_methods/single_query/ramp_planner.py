@@ -302,7 +302,8 @@ class RampPlanner:
         Remove the infeasible edge from the tree.
 
         Args:
-            infeasible_edge (tuple): A tuple (start_node, end_node) representing the edge to be removed.
+            infeasible_edge (tuple): A tuple (start_node, end_node, bridge_start_node, bridge_end_node) 
+                                    representing the edge to be removed.
 
         Returns:
             None
@@ -315,7 +316,8 @@ class RampPlanner:
             return
 
         # Case 2: The edge is internal to a single tree
-        tree = self.forward_tree if start_node.tree_type == 'forward' else self.backward_tree
+        old_tree = self.forward_tree if start_node.tree_type == 'forward' else self.backward_tree
+        new_tree = self.backward_tree if start_node.tree_type == 'forward' else self.forward_tree
 
         # Determine the bridge node belonging to the same tree as end_node
         if bridge_start_node.tree_type == end_node.tree_type:
@@ -336,17 +338,26 @@ class RampPlanner:
             # Update current node's parent to the new parent node
             current_node.parent_index = new_parent_node.index
             current_node.tree_type = new_parent_node.tree_type
+
+            # Update trajectory and segment time
             segment_time, trajectory_info = self._compute_optimal_segment(
-                new_parent_node.state.reshape(2, self.dimension), current_node.state.reshape(2, self.dimension))
+                new_parent_node.state.reshape(2, self.dimension), 
+                current_node.state.reshape(2, self.dimension)
+            )
             current_node.segment_time = segment_time
             current_node.trajectory_info = trajectory_info
 
+            # Move the current node to the new tree
+            old_tree.remove(current_node)
+            new_tree.append(current_node)
+
             # Move to the old parent node
-            current_node = tree[old_parent_index]
+            current_node = old_tree[old_parent_index]
 
             # Update the new parent node for the next iteration
             new_parent_node = current_node
-        
+
+        # Update the visualization
         self._update_plot()
 
     def _check_state_limits(self, state):
@@ -766,7 +777,9 @@ class RampPlanner:
             velocities.append(state[1])
 
         positions = np.array(positions)
-        self.ax.plot(positions[:, 0], positions[:, 1], color, linewidth=0.5)
+        line_obj, = self.ax.plot(positions[:, 0], positions[:, 1], color, linewidth=0.5)
+        
+        return line_obj
 
     ############### Trajectory Generation ###############
     def _get_state_in_segment(self, start_state, end_state, segment_time, segment_trajectory, t):
