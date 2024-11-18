@@ -349,13 +349,14 @@ class RampPlanner:
 
             # Move the current node to the new tree
             old_tree.remove(current_node)
+            current_node.index = len(new_tree)  # Reassign index based on new tree size
             new_tree.append(current_node)
-
-            # Move to the old parent node
-            current_node = old_tree[old_parent_index]
 
             # Update the new parent node for the next iteration
             new_parent_node = current_node
+            
+            # Move to the old parent node
+            current_node = old_tree[old_parent_index]
 
         # Update the visualization
         self._update_plot()
