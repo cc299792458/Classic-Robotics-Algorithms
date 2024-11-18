@@ -119,7 +119,7 @@ class RampPlanner:
                     result = self._check_paths_collision(paths)
                     if isinstance(result, list):  # If the result is the connected path
                         # Apply path smoothing and return the final path
-                        smoothed_path = self.shortcut_path(result)
+                        smoothed_path = self.reconstruct_path(result)
                         self.path = smoothed_path
 
                         self._update_plot()
@@ -222,11 +222,11 @@ class RampPlanner:
 
         # Check position limits first
         if not self._check_state_limits(final_state):
-            return None
+            return None, None, None
 
         # Then check for collisions
         if not self.collision_checker(final_state):
-            return None
+            return None, None, None
 
         return final_state, t_max, trajectory_info
 
@@ -303,7 +303,57 @@ class RampPlanner:
 
         return paths
 
-    def shortcut_path(self, path):
+    def reconstruct_path(self, path):
+        """
+        Adjust the path order to form a single continuous trajectory from start to end,
+        and recalculate trajectory information for all nodes.
+
+        Args:
+            path (list of Node): The input path, potentially disordered.
+
+        Returns:
+            list of Node: A reordered and smoothed path from start to end.
+        """
+        if not path:
+            return []
+
+        reconstructed_path = []
+
+        # Iterate through the path to create a new continuous sequence of nodes
+        for i, node in enumerate(path):
+            # Create a new copy of the node
+            new_node = Node(
+                state=node.state.copy(),
+                tree_type="forward",  # Unified tree type for the smoothed path
+                parent=None,          # Parent will be updated dynamically
+            )
+
+            if i > 0:  # Recalculate trajectory with the previous node
+                prev_node = reconstructed_path[-1]
+
+                if node.tree_type == 'forward':  # Parent-child relationship intact
+                    new_node.segment_time = node.segment_time
+                    new_node.trajectory_info = node.trajectory_info
+                else:  # Relationship broken, recalculate
+                    segment_time, trajectory_info = self._compute_optimal_segment(
+                        prev_node.state.reshape(2, self.dimension),
+                        new_node.state.reshape(2, self.dimension)
+                    )
+                    new_node.segment_time = segment_time
+                    new_node.trajectory_info = trajectory_info
+
+                # Set parent relationship
+                new_node.parent = prev_node
+                prev_node.children.append(new_node)
+
+            reconstructed_path.append(new_node)
+
+        # Optionally perform additional smoothing
+        smoothed_path = self.smooth_path(reconstructed_path)
+
+        return smoothed_path
+    
+    def smooth_path(self, path):
         return path
 
     def remove_infeasible_edge(self, infeasible_edge):
@@ -755,7 +805,7 @@ class RampPlanner:
             self._legend_added = True  # Mark that the legend has been added
 
         plt.show(block=False)
-        plt.pause(0.25)
+        plt.pause(0.5)
 
     def _draw_node(self, node, color, tree_type):
         """
@@ -799,7 +849,7 @@ class RampPlanner:
 
         positions = np.array(positions)
         line_obj, = self.ax.plot(positions[:, 0], positions[:, 1], color, linewidth=linewidth)
-        
+
         return line_obj
     
     def _draw_path(self, color='orange', point_size=5, linewidth=1.5):
@@ -829,7 +879,7 @@ class RampPlanner:
                 start_node = self.path[i - 1]
                 end_node = current_node
 
-                if start_node.segment_time is None or start_node.trajectory_info is None:
+                if end_node.segment_time is None or end_node.trajectory_info is None:
                     print(f"Warning: Missing trajectory info for edge ({start_node}, {end_node}). Skipping this edge.")
                     continue
 

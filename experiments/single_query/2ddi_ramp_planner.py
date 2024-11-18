@@ -58,7 +58,7 @@ if __name__ == '__main__':
 
     # Define start and goal states (position and velocity)
     start = np.array([2.0, 2.0, 0.0, 0.0])  # [x, y, vx, vy]
-    goal = np.array([8.0, 8.0, 1.0, -1.0])  # [x, y, vx, vy]
+    goal = np.array([8.0, 8.0, -1.0, 1.0])  # [x, y, vx, vy]
 
     # Define state limits
     position_limits = (np.array([0.0, 0.0]), np.array([10.0, 10.0]))  # [min_pos, max_pos]
