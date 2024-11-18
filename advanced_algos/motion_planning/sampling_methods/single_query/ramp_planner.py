@@ -7,14 +7,13 @@ from scipy.spatial import KDTree
 from advanced_algos.motion_planning.smoothing import FSBAS
 
 class Node:
-    def __init__(self, state, tree_type, index, parent=None, segment_time=None, trajectory_info=None):
+    def __init__(self, state, tree_type, parent=None, segment_time=None, trajectory_info=None):
         """
         Initialize a Node.
 
         Args:
             state (np.ndarray): The state of the node.
             tree_type (str): The type of the tree ('forward' or 'backward') to which this node belongs.
-            index (int): The index of the current node in the tree.
             parent (Node or None): The parent node in the tree.
             segment_time (float): The time required to traverse the segment leading to this node.
             trajectory_info (object): Trajectory-related information for this node.
@@ -22,7 +21,6 @@ class Node:
         self.state = state
         assert tree_type == 'forward' or tree_type == 'backward'
         self.tree_type = tree_type
-        self.index = index
         self.parent = parent
         self.segment_time = segment_time
         self.trajectory_info = trajectory_info
@@ -53,8 +51,8 @@ class RampPlanner:
                                 Shape: (n_dimensions,)
         """
         # Initialize forward and backward trees using Node class
-        self.forward_tree = [Node(state=start, tree_type='forward', index=0)]
-        self.backward_tree = [Node(state=goal, tree_type='backward', index=0)]
+        self.forward_tree = [Node(state=start, tree_type='forward')]
+        self.backward_tree = [Node(state=goal, tree_type='backward')]
 
         self.max_iters = max_iters
         self.collision_checker = collision_checker
@@ -146,13 +144,12 @@ class RampPlanner:
 
             if final_state is not None:
                 # Check if there's already a nearby node
-                nearby_nodes, _ = self._find_nearby_nodes(tree, final_state, epsilon=1e-2)
+                nearby_nodes = self._find_nearby_nodes(tree, final_state, epsilon=1e-2)
                 if nearby_nodes == []:
                     # Create a new node and append it to the tree
                     new_node = Node(
                         state=final_state,
                         tree_type=tree_type,
-                        index=len(tree),
                         parent=None,  # Root node
                         segment_time=segment_time,
                         trajectory_info=trajectory_info,
@@ -259,7 +256,6 @@ class RampPlanner:
         new_node = Node(
             state=random_state,
             tree_type=sampled_node.tree_type,
-            index=len(tree),
             parent=sampled_node,
             segment_time=segment_time,
             trajectory_info=trajectory_info,
@@ -286,7 +282,7 @@ class RampPlanner:
             list of list[Node] or None: Two paths (from root to the connecting node in each tree)
                                         if connection is found, else None.
         """
-        nearest_node, _, distance = self._find_nearest_node(tree, node)
+        nearest_node, distance = self._find_nearest_node(tree, node)
 
         if distance > epsilon:
             return None
@@ -299,7 +295,7 @@ class RampPlanner:
 
         return paths
 
-    def shortcut_path(self):
+    def shortcut_path(self, path):
         pass
 
     def remove_infeasible_edge(self, infeasible_edge):
@@ -336,7 +332,7 @@ class RampPlanner:
         current_node = bridge_in_same_tree
         new_parent_node = bridge_in_other_tree  # The initial new parent node from the other tree
 
-        while current_node.index != start_node.index:
+        while current_node is not start_node:
             # Record the current parent node
             old_parent = current_node.parent
 
@@ -354,7 +350,6 @@ class RampPlanner:
 
             # Move the current node to the new tree
             old_tree.remove(current_node)
-            current_node.index = len(new_tree)  # Reassign index based on new tree size
             new_tree.append(current_node)
 
             # Update the new parent node for the next iteration
@@ -426,7 +421,7 @@ class RampPlanner:
         # Retrieve the Node objects from the tree
         nearby_nodes = [tree[i] for i in nearby_indices]
 
-        return nearby_nodes, nearby_indices
+        return nearby_nodes
     
     def _find_nearest_node(self, tree, target_node):
         """
@@ -439,7 +434,6 @@ class RampPlanner:
         Returns:
             tuple:
                 - nearest_node (Node): The nearest Node object in the tree.
-                - nearest_index (int): The index of the nearest node in the tree.
                 - distance (float): The weighted distance to the nearest node.
         """
         # Extract states from the Node objects in the tree
@@ -459,7 +453,7 @@ class RampPlanner:
         # Retrieve the nearest Node object from the tree
         nearest_node = tree[nearest_index]
 
-        return nearest_node, nearest_index, distance
+        return nearest_node, distance
     
     def _sample_free_space_state(self):
         """
@@ -750,8 +744,7 @@ class RampPlanner:
             tree_type (str): The type of the tree ('forward' or 'backward') for legend labeling.
         """
         pos, vel = node.state[:2], node.state[2:]
-        self.ax.plot(pos[0], pos[1], f'{color}o', markersize=3,
-                    label=f"{tree_type.capitalize()} Tree" if node.index == 1 else None)
+        self.ax.plot(pos[0], pos[1], f'{color}o', markersize=3)
         self._draw_velocity_arrow(position=pos, velocity=vel, color=color)
 
     def _draw_edge(self, from_node, to_node, color):
