@@ -13,7 +13,7 @@ class FSBAS:
     and acceleration, using optimal shortcuts for improved performance and natural-looking motion.
     """
     
-    def __init__(self, path, vmax, amax, collision_checker, max_iterations=100):
+    def __init__(self, path, vmax, amax, collision_checker, max_iterations=100, obstacles=None):
         """
         Initialize the FSBAS class.
 
@@ -30,8 +30,9 @@ class FSBAS:
         self.dimension = self.vmax.shape[0]
         self.collision_checker = collision_checker
         self.max_iterations = max_iterations
-        self.segment_trajectory = []  # List of trajectories for each segment
         self.segment_time = np.array([])  # Array of time durations for each segment
+        self.segment_trajectory = []  # List of trajectories for each segment
+        self.obstacles = obstacles
 
     def smooth_path(self, plot_trajectory=False):
         """
@@ -45,7 +46,7 @@ class FSBAS:
         for iteration in range(self.max_iterations):
             total_time = np.sum(self.segment_time)
             if plot_trajectory:
-                self.plot_trajectory(iteration)
+                self.plot_trajectory(iteration, obstacles=self.obstacles)
             t1, t2 = self._select_random_times(total_time)
             start_state = self._get_state_at_time(t1)
             end_state = self._get_state_at_time(t2)
@@ -518,8 +519,10 @@ class FSBAS:
         a_min, selected_primitive = min(valid_results, key=lambda x: x[0])
         return a_min, selected_primitive
 
-    def _is_segment_collision_free(self, start_state, end_state, segment_time, segment_trajectory):
-        sampled_times = np.linspace(0, segment_time, 10)
+    def _is_segment_collision_free(self, start_state, end_state, segment_time, segment_trajectory, time_step=0.01):
+        # Generate time points to sample along the trajectory
+        num_samples = int(segment_time / time_step) + 1
+        sampled_times = np.linspace(0, segment_time, num_samples)
 
         for time in sampled_times:
             state = self._get_state_in_segment(
@@ -531,12 +534,17 @@ class FSBAS:
                 return False
         return True
     
-    def plot_trajectory(self, iteration=None):
+    def plot_trajectory(self, iteration=None, obstacles=None):
         """
         Plot the current trajectory of the FSBAS object in 2D with animation during smoothing.
 
         This method dynamically updates the trajectory plot for visualization without creating new windows.
         Optionally, displays the current iteration number.
+
+        Args:
+            iteration (int, optional): The current iteration number to display on the plot.
+            obstacles (list of tuple, optional): List of obstacles, where each obstacle is defined as a
+                                                tuple (x, y, width, height).
         """
         if self.dimension != 2:
             raise ValueError("This plotting function only supports 2D trajectories.")
@@ -557,10 +565,29 @@ class FSBAS:
             # Line for the current smoothed trajectory
             self._trajectory_line, = self._ax.plot([], [], '-o', markersize=2, label='Smoothed Trajectory')
 
-            # Text for iteration number
-            self._iteration_text = self._ax.text(0.02, 0.95, "", transform=self._ax.transAxes, fontsize=12, color="blue")
+            # Add obstacles if provided
+            if obstacles is not None:
+                # Check if the obstacle label has already been added
+                if not hasattr(self, "_obstacle_label_added"):
+                    self._obstacle_label_added = False
 
-            self._ax.legend()
+                for obs in obstacles:
+                    x, y, width, height = obs
+                    # Add the label "Obstacle" only once
+                    if not self._obstacle_label_added:
+                        self._ax.add_patch(plt.Rectangle((x, y), width, height, color="gray", alpha=0.5, label="Obstacle"))
+                        self._obstacle_label_added = True
+                    else:
+                        self._ax.add_patch(plt.Rectangle((x, y), width, height, color="gray", alpha=0.5))
+
+            # Place legend in the upper-left corner
+            self._ax.legend(loc="upper left")
+
+            # Text for iteration number in the upper-right corner
+            self._iteration_text = self._ax.text(0.95, 0.95, "", 
+                                                transform=self._ax.transAxes, 
+                                                fontsize=12, color="blue",
+                                                ha="right", va="top")
 
         # Update the trajectory
         positions = []

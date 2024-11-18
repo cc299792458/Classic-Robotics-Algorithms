@@ -125,7 +125,8 @@ class RampPlanner:
                     result = self._check_paths_collision(paths)
                     if isinstance(result, list):  # If the result is the connected path
                         # Apply path smoothing and return the final path
-                        smoothed_path = self.reconstruct_path(result)
+                        reconstructed_path = self.reconstruct_path(result)
+                        smoothed_path = self.smooth_path(reconstructed_path)
                         self.path = smoothed_path
 
                         self._update_plot()
@@ -343,13 +344,14 @@ class RampPlanner:
 
             reconstructed_path.append(new_node)
 
-        # Optionally perform additional smoothing
-        smoothed_path = self.smooth_path(reconstructed_path)
-
-        return smoothed_path
+        return reconstructed_path
     
     def smooth_path(self, path):
-        return path
+        path_state = [node.state.reshape(2, self.dimension) for node in path]
+        fsbas = FSBAS(path=path_state, vmax=self.vmax, amax=self.amax, collision_checker=self.collision_checker, max_iterations=10)
+        fsbas.smooth_path()
+        
+        return fsbas.path 
 
     def remove_infeasible_edge(self, infeasible_edge):
         """
@@ -721,10 +723,25 @@ class RampPlanner:
 
         # Add obstacles if provided
         if self.visualization_args and "obstacles" in self.visualization_args:
+            # Check if the obstacle label has already been added
+            if not hasattr(self, "_obstacle_label_added"):
+                self._obstacle_label_added = False
+            
             for obs in self.visualization_args["obstacles"]:
-                self.ax.add_patch(plt.Rectangle(obs[:2], obs[2], obs[3], color="gray", alpha=0.5))
+                x, y, width, height = obs
+                # Add the label "Obstacle" only once
+                if not self._obstacle_label_added:
+                    self.ax.add_patch(plt.Rectangle((x, y), width, height, color="gray", alpha=0.5, label="Obstacle"))
+                    self._obstacle_label_added = True
+                else:
+                    self.ax.add_patch(plt.Rectangle((x, y), width, height, color="gray", alpha=0.5))
 
-        self.ax.legend()
+        self.ax.legend(loc="upper left")
+
+        self.iteration_text = self.ax.text(0.95, 0.95, f"Num of nodes: {2+len(self.forward_tree)+len(self.backward_tree)}", 
+                                            transform=self.ax.transAxes, 
+                                            fontsize=12, color="blue",
+                                            ha="right", va="top")
 
         plt.show(block=False)
         plt.pause(0.5)
@@ -807,8 +824,10 @@ class RampPlanner:
         if not hasattr(self, "_legend_added") or not self._legend_added:
             handles, labels = self.ax.get_legend_handles_labels()
             if len(labels) <= 10:
-                self.ax.legend(loc="upper right")
+                self.ax.legend(loc="upper left")
             self._legend_added = True  # Mark that the legend has been added
+
+        self.iteration_text.set_text(f"Num of nodes: {2+len(self.forward_tree)+len(self.backward_tree)}")
 
         plt.show(block=False)
         plt.pause(0.5)

@@ -19,32 +19,8 @@ def collision_checker(state, obstacles):
     x, y = position
     for (ox, oy, width, height) in obstacles:
         if ox <= x <= ox + width and oy <= y <= oy + height:
-            return True  # Collision detected
-    return False  # No collision
-
-
-def is_obstacle_free_trajectory(state1, state2, obstacles):
-    """
-    Check if the trajectory from state1 to state2 is collision-free.
-    The trajectory is discretized into multiple points for collision checking.
-
-    Args:
-        state1 (np.ndarray): Starting state as a concatenated position and velocity vector.
-                             Shape: (2 * n_dimensions,)
-        state2 (np.ndarray): Ending state as a concatenated position and velocity vector.
-                             Shape: (2 * n_dimensions,)
-        obstacles (list of tuples): List of obstacles defined as (x, y, width, height).
-
-    Returns:
-        bool: True if the trajectory is collision-free, False otherwise.
-    """
-    num_checks = 20
-    for s in np.linspace(0, 1, num_checks):
-        interp_state = state1 + s * (state2 - state1)
-        if collision_checker(interp_state, obstacles):
             return False  # Collision detected
-    return True  # No collision detected
-
+    return True  # No collision
 
 if __name__ == '__main__':
     # Set random seed for reproducibility
@@ -75,7 +51,7 @@ if __name__ == '__main__':
         start=start,
         goal=goal,
         max_iters=max_iters,
-        collision_checker=lambda state: not collision_checker(state, obstacles),
+        collision_checker=lambda state: collision_checker(state, obstacles),
         position_limits=position_limits,
         vmax=velocity_limits,
         amax=acceleration_limits
