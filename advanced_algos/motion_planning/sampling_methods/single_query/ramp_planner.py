@@ -1,3 +1,4 @@
+import uuid
 import random
 import numpy as np
 import matplotlib.pyplot as plt
@@ -6,7 +7,7 @@ from scipy.spatial import KDTree
 from advanced_algos.motion_planning.smoothing import FSBAS
 
 class Node:
-    def __init__(self, state, tree_type, index, parent_index=None, segment_time=None, trajectory_info=None):
+    def __init__(self, state, tree_type, index, parent=None, segment_time=None, trajectory_info=None):
         """
         Initialize a Node.
 
@@ -14,7 +15,7 @@ class Node:
             state (np.ndarray): The state of the node.
             tree_type (str): The type of the tree ('forward' or 'backward') to which this node belongs.
             index (int): The index of the current node in the tree.
-            parent (int): The index of the parent node in the tree.
+            parent (Node or None): The parent node in the tree.
             segment_time (float): The time required to traverse the segment leading to this node.
             trajectory_info (object): Trajectory-related information for this node.
         """
@@ -22,9 +23,13 @@ class Node:
         assert tree_type == 'forward' or tree_type == 'backward'
         self.tree_type = tree_type
         self.index = index
-        self.parent_index = parent_index
+        self.parent = parent
         self.segment_time = segment_time
         self.trajectory_info = trajectory_info
+        self.children = []
+
+        # Generate a unique identifier for this node
+        self.uuid = uuid.uuid4()
 
 class RampPlanner:
     def __init__(self, start, goal, max_iters, collision_checker, position_limits, vmax, amax):
@@ -148,7 +153,7 @@ class RampPlanner:
                         state=final_state,
                         tree_type=tree_type,
                         index=len(tree),
-                        parent_index=0,  # Root node index
+                        parent=None,  # Root node
                         segment_time=segment_time,
                         trajectory_info=trajectory_info,
                     )
@@ -255,7 +260,7 @@ class RampPlanner:
             state=random_state,
             tree_type=sampled_node.tree_type,
             index=len(tree),
-            parent_index=sampled_node.index,
+            parent=sampled_node,
             segment_time=segment_time,
             trajectory_info=trajectory_info,
         )
@@ -333,10 +338,10 @@ class RampPlanner:
 
         while current_node.index != start_node.index:
             # Record the current parent node
-            old_parent_index = current_node.parent_index
+            old_parent = current_node.parent
 
             # Update current node's parent to the new parent node
-            current_node.parent_index = new_parent_node.index
+            current_node.parent = new_parent_node
             current_node.tree_type = new_parent_node.tree_type
 
             # Update trajectory and segment time
@@ -356,7 +361,7 @@ class RampPlanner:
             new_parent_node = current_node
             
             # Move to the old parent node
-            current_node = old_tree[old_parent_index]
+            current_node = old_parent
 
         # Update the visualization
         self._update_plot()
@@ -490,10 +495,8 @@ class RampPlanner:
         # Trace back to the root
         while current_node is not None:
             path.append(current_node)
-            if current_node.parent_index is not None:
-                # Determine the tree type to find the parent node
-                parent_tree = self.forward_tree if current_node.tree_type == 'forward' else self.backward_tree
-                current_node = parent_tree[current_node.parent_index]
+            if current_node.parent is not None:
+                current_node = current_node.parent
             else:
                 current_node = None
 
@@ -697,17 +700,17 @@ class RampPlanner:
             current_edges = set()
 
             for node in tree:
-                if node.parent_index is None:  # Skip root node
+                if node.parent is None:  # Skip root node
                     continue
 
                 # Draw the node and velocity arrow
                 self._draw_node(node, color, tree_type)
 
                 # Get parent node
-                parent_node = tree[node.parent_index]
+                parent_node = node.parent
 
                 # Generate a unique key for the edge (undirected)
-                edge_key = frozenset({node.parent_index, node.index})
+                edge_key = (frozenset({parent_node.uuid, node.uuid}))
                 current_edges.add(edge_key)
 
                 # Check if the edge needs to be added
