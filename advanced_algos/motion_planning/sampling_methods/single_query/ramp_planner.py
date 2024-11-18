@@ -122,6 +122,8 @@ class RampPlanner:
                         smoothed_path = self.shortcut_path(result)
                         self.path = smoothed_path
 
+                        self._update_plot()
+
                         # Return the smoothed path as a list of states
                         return [node.state for node in smoothed_path]
                     else:
@@ -135,26 +137,29 @@ class RampPlanner:
         """
         Seed the forward and backward trees with maximum braking trajectories.
         """
-        for tree, root_state, tree_type in [
-            (self.forward_tree, self.forward_tree[0].state, 'forward'),
-            (self.backward_tree, self.backward_tree[0].state, 'backward'),
+        for tree, root_node, tree_type in [
+            (self.forward_tree, self.forward_tree[0], 'forward'),
+            (self.backward_tree, self.backward_tree[0], 'backward'),
         ]:
             # Generate maximum braking trajectory from the root state
-            final_state, segment_time, trajectory_info = self.generate_max_braking_trajectory(root_state)
+            final_state, segment_time, trajectory_info = self.generate_max_braking_trajectory(root_node.state)
 
             if final_state is not None:
                 # Check if there's already a nearby node
                 nearby_nodes = self._find_nearby_nodes(tree, final_state, epsilon=1e-2)
-                if nearby_nodes == []:
+                if not nearby_nodes:
                     # Create a new node and append it to the tree
                     new_node = Node(
                         state=final_state,
                         tree_type=tree_type,
-                        parent=None,  # Root node
+                        parent=root_node,  # Parent is the root node
                         segment_time=segment_time,
                         trajectory_info=trajectory_info,
                     )
                     tree.append(new_node)
+
+                    # Update the root node's children
+                    root_node.children.append(new_node)
 
                     # Update visualization
                     if self.visualization:
@@ -264,6 +269,9 @@ class RampPlanner:
         # Append the new node to the tree
         tree.append(new_node)
 
+        # Add the new node to the parent's children list
+        sampled_node.children.append(new_node)
+
         # Update the plot if visualization is enabled
         if self.visualization:
             self._update_plot()
@@ -296,7 +304,7 @@ class RampPlanner:
         return paths
 
     def shortcut_path(self, path):
-        pass
+        return path
 
     def remove_infeasible_edge(self, infeasible_edge):
         """
@@ -313,7 +321,6 @@ class RampPlanner:
 
         # Case 1: If the edge is a bridge, do nothing
         if start_node.tree_type != end_node.tree_type:
-            # The edge is a bridge; no reconfiguration is needed
             return
 
         # Case 2: The edge is internal to a single tree
@@ -338,7 +345,10 @@ class RampPlanner:
 
             # Update current node's parent to the new parent node
             current_node.parent = new_parent_node
-            current_node.tree_type = new_parent_node.tree_type
+
+            # Update parent's children relationship
+            old_parent.children.remove(current_node)
+            new_parent_node.children.append(current_node)
 
             # Update trajectory and segment time
             segment_time, trajectory_info = self._compute_optimal_segment(
@@ -348,9 +358,19 @@ class RampPlanner:
             current_node.segment_time = segment_time
             current_node.trajectory_info = trajectory_info
 
-            # Move the current node to the new tree
-            old_tree.remove(current_node)
-            new_tree.append(current_node)
+            # Update all child nodes' tree type before moving to the old parent
+            stack = [current_node]
+            while stack:
+                node = stack.pop()
+                # Update the tree type for the current node
+                node.tree_type = new_parent_node.tree_type
+
+                # Move the node from the old tree to the new tree
+                old_tree.remove(node)
+                new_tree.append(node)
+
+                # Add all children of the current node to the stack for processing
+                stack.extend(node.children)
 
             # Update the new parent node for the next iteration
             new_parent_node = current_node
@@ -724,6 +744,9 @@ class RampPlanner:
                 # Delete from edge tracking dictionary
                 del self.edges[tree_type][edge_key]
 
+        if self.path is not None:
+            self._draw_path()
+
         # Add legend if not already added
         if not hasattr(self, "_legend_added") or not self._legend_added:
             handles, labels = self.ax.get_legend_handles_labels()
@@ -747,7 +770,7 @@ class RampPlanner:
         self.ax.plot(pos[0], pos[1], f'{color}o', markersize=3)
         self._draw_velocity_arrow(position=pos, velocity=vel, color=color)
 
-    def _draw_edge(self, from_node, to_node, color):
+    def _draw_edge(self, from_node, to_node, color, linewidth=0.5):
         """
         Draw the trajectory segment connecting two nodes.
 
@@ -755,6 +778,7 @@ class RampPlanner:
             from_node (Node): The starting node of the trajectory.
             to_node (Node): The ending node of the trajectory.
             color (str): The color for the trajectory line.
+            linewidth (float): The width of the trajectory line.
         """
         if to_node.segment_time is None or to_node.trajectory_info is None:
             return  # Skip if trajectory info is missing
@@ -774,9 +798,45 @@ class RampPlanner:
             velocities.append(state[1])
 
         positions = np.array(positions)
-        line_obj, = self.ax.plot(positions[:, 0], positions[:, 1], color, linewidth=0.5)
+        line_obj, = self.ax.plot(positions[:, 0], positions[:, 1], color, linewidth=linewidth)
         
         return line_obj
+    
+    def _draw_path(self, color='orange', point_size=5, linewidth=1.5):
+        """
+        Visualize the final smoothed path on the plot using _draw_edge, and draw the nodes (points) along the path.
+
+        Args:
+            color (str): The color and style of the path line (default is 'orange').
+            point_size (float): The size of the points (default is 5).
+            linewidth (float): The width of the path line (default is 1.5).
+        """    
+        if not hasattr(self, 'path') or self.path is None:
+            return  # No path to draw
+
+        # Iterate through consecutive nodes in the path
+        for i in range(len(self.path)):
+            current_node = self.path[i]
+
+            # Draw the point (node)
+            self.ax.scatter(
+                current_node.state[0], current_node.state[1], 
+                c=color, s=point_size, label="Path Point" if i == 0 else None
+            )
+
+            # Draw the edge connecting this node to the previous one
+            if i > 0:
+                start_node = self.path[i - 1]
+                end_node = current_node
+
+                if start_node.segment_time is None or start_node.trajectory_info is None:
+                    print(f"Warning: Missing trajectory info for edge ({start_node}, {end_node}). Skipping this edge.")
+                    continue
+
+                self._draw_edge(start_node, end_node, color=color, linewidth=linewidth)
+
+        # Add a legend for the path points
+        self.ax.legend()
 
     ############### Trajectory Generation ###############
     def _get_state_in_segment(self, start_state, end_state, segment_time, segment_trajectory, t):
