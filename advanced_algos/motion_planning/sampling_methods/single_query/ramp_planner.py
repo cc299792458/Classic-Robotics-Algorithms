@@ -50,9 +50,13 @@ class RampPlanner:
             amax (np.ndarray): Maximum acceleration magnitudes for each dimension.
                                 Shape: (n_dimensions,)
         """
-        # Initialize forward and backward trees using Node class
-        self.forward_tree = [Node(state=start, tree_type='forward')]
-        self.backward_tree = [Node(state=goal, tree_type='backward')]
+        # Initialize start and goal using Node class. 
+        self.start = Node(state=start, tree_type='forward')
+        self.goal = Node(state=goal, tree_type='backward')
+
+        # Initialize forward tree and backward tree.
+        self.forward_tree = []
+        self.backward_tree = []
 
         self.max_iters = max_iters
         self.collision_checker = collision_checker
@@ -86,6 +90,11 @@ class RampPlanner:
         Returns:
             list of np.ndarray or None: Planned trajectory as a list of concatenated position and velocity vectors if successful, else None.
         """
+        # Seed the trees with maximum braking trajectories
+        if not self.seed_trees():
+            print("Failed to seed trees. Exiting.")
+            return None  # Fail if this step fails
+
         # Initialize visualization if needed
         if visualize:
             self.visualization = True
@@ -93,9 +102,6 @@ class RampPlanner:
 
             self.fig, self.ax = plt.subplots(figsize=(8, 8))
             self._initialize_plot()
-
-        # Seed the trees with maximum braking trajectories
-        self.seed_trees()
 
         # Define forward and backward trees for alternating extension
         trees = [
@@ -137,98 +143,87 @@ class RampPlanner:
         """
         Seed the forward and backward trees with maximum braking trajectories.
         """
-        for tree, root_node, tree_type in [
-            (self.forward_tree, self.forward_tree[0], 'forward'),
-            (self.backward_tree, self.backward_tree[0], 'backward'),
+        for tree, seed_node, tree_type in [
+            (self.forward_tree, self.start, 'forward'),
+            (self.backward_tree, self.goal, 'backward'),
         ]:
             # Generate maximum braking trajectory from the root state
-            final_state, segment_time, trajectory_info = self.generate_max_braking_trajectory(root_node.state)
+            initial_state, segment_time, trajectory_info = self.generate_max_braking_trajectory(seed_node.state)
+            if initial_state is not None:
+                # Create a new node and append it to the tree
+                new_node = Node(
+                    state=initial_state,
+                    tree_type=tree_type,
+                    parent=None,  # Seem as the root of the tree
+                )
+                tree.append(new_node)
 
-            if final_state is not None:
-                # Check if there's already a nearby node
-                nearby_nodes = self._find_nearby_nodes(tree, final_state, epsilon=1e-2)
-                if not nearby_nodes:
-                    # Create a new node and append it to the tree
-                    new_node = Node(
-                        state=final_state,
-                        tree_type=tree_type,
-                        parent=root_node,  # Parent is the root node
-                        segment_time=segment_time,
-                        trajectory_info=trajectory_info,
-                    )
-                    tree.append(new_node)
+                seed_node.segment_time = segment_time
+                seed_node.trajectory_info = trajectory_info
 
-                    # Update the root node's children
-                    root_node.children.append(new_node)
-
-                    # Update visualization
-                    if self.visualization:
-                        self._update_plot()
+                if not self._check_edge_collision(new_node, seed_node, segment_time, trajectory_info):
+                    return False
+                
+        return True
 
     def generate_max_braking_trajectory(self, state):
         """
-        Generate the final state after applying maximum braking to reach zero velocity with synchronized stopping,
-        considering each dimension independently.
+        Generate the initial zero-speed state and the trajectory to the given state.
 
         Args:
-            state (np.ndarray): Initial state as a concatenated position and velocity vector.
+            state (np.ndarray): Target state as a concatenated position and velocity vector.
                                 Shape: (2 * n_dimensions,)
 
         Returns:
             tuple or None:
-                - final_state (np.ndarray): Final state after braking.
+                - initial_state (np.ndarray): The zero-speed state.
                 - trajectory_info (list of tuples): Trajectory information for each dimension:
-                    - trajectory_type (str): Always "P+P-" for braking.
-                    - acceleration (float): Absolute acceleration used for braking in the dimension.
+                    - trajectory_type (str): Always "P-P+" for acceleration.
+                    - acceleration (float): Absolute acceleration used for acceleration in the dimension.
         """
         pos_dim = self.dimension
 
-        # Extract current position and velocity
+        # Extract target position and velocity
         position = state[:pos_dim]
         velocity = state[pos_dim:]
 
-        # Calculate stopping time for each dimension
-        stopping_times = np.abs(velocity) / self.amax
-        t_max = np.max(stopping_times)  # Use the maximum stopping time
+        # Calculate acceleration time for each dimension
+        acceleration_times = np.abs(velocity) / self.amax
+        t_max = np.max(acceleration_times)  # Use the maximum acceleration time
 
-        # Initialize arrays for final state and trajectory info
-        final_position = np.zeros_like(position)
-        final_velocity = np.zeros_like(velocity)
+        # Initialize arrays for initial state and trajectory info
+        initial_position = np.zeros_like(position)
         trajectory_info = []
 
-        # Calculate braking for each dimension independently
+        # Calculate acceleration for each dimension independently
         for i in range(pos_dim):
             if t_max > 0:
-                # Compute acceleration to stop in t_max
-                a = -velocity[i] / t_max
-                # Clamp acceleration to the allowable range
-                a = np.clip(a, -self.amax[i], self.amax[i])
+                # Compute acceleration to achieve target velocity in t_max
+                a = velocity[i] / t_max
 
-                # Compute position change using Δp = v * t + 0.5 * a * t^2
-                delta_p = velocity[i] * t_max + 0.5 * a * t_max**2
-                final_position[i] = position[i] + delta_p
-                final_velocity[i] = 0.0  # Velocity reaches zero
+                # Compute initial position using Δp = -0.5 * a * t^2
+                delta_p = -0.5 * a * t_max**2
+                initial_position[i] = position[i] + delta_p
 
                 # Store trajectory information
                 trajectory_info.append((np.abs(a), "P+P-"))
             else:
                 # No motion in this dimension
-                final_position[i] = position[i]
-                final_velocity[i] = velocity[i]
+                initial_position[i] = position[i]
                 trajectory_info.append((0.0, "P+P-"))  # No acceleration needed
 
-        # Combine final position and velocity into a single state
-        final_state = np.concatenate((final_position, final_velocity))
+        # Combine initial position and zero velocity into a single state
+        initial_state = np.concatenate((initial_position, np.zeros_like(velocity)))
 
         # Check position limits first
-        if not self._check_state_limits(final_state):
+        if not self._check_state_limits(initial_state):
             return None, None, None
 
         # Then check for collisions
-        if not self.collision_checker(final_state):
+        if not self.collision_checker(initial_state):
             return None, None, None
 
-        return final_state, t_max, trajectory_info
+        return initial_state, t_max, trajectory_info
 
     def extend_tree(self, tree):
         """
@@ -575,25 +570,31 @@ class RampPlanner:
 
         Args:
             paths (list of list of Node): Two paths, where one starts with start_node
-                                        and the other starts with end_node.
+                                            and the other starts with end_node.
 
         Returns:
             list of Node: Combined path from start_node to end_node.
         """
         path1, path2 = paths
 
-        # Identify the path starting from start_node and the one starting from end_node
+        # Identify the forward and backward paths based on tree type
         if path1[0].tree_type == "forward" and path2[0].tree_type == "backward":
-            # Reverse the path starting with end_node (backward tree)
-            path2 = path2[::-1]
+            forward_path = path1
+            backward_path = path2[::-1]  # Reverse the backward path
         elif path2[0].tree_type == "forward" and path1[0].tree_type == "backward":
-            # Reverse the path starting with end_node (backward tree)
-            path1 = path1[::-1]
+            forward_path = path2
+            backward_path = path1[::-1]  # Reverse the backward path
         else:
             raise ValueError("Invalid paths: Unable to determine start and end nodes.")
 
         # Combine paths
-        combined_path = path1 + path2
+        combined_path = forward_path + backward_path
+
+        # Insert seed nodes
+        if not np.array_equal(self.start.state, combined_path[0].state):
+            combined_path.insert(0, self.start)
+        if not np.array_equal(self.goal.state, combined_path[-1].state):
+            combined_path.append(self.goal)
 
         return combined_path
     
@@ -670,6 +671,9 @@ class RampPlanner:
         Returns:
             bool: True if the edge is collision-free, False otherwise.
         """
+        if segment_time == 0:
+            return True
+
         # Generate time points to sample along the trajectory
         num_samples = int(segment_time / time_step) + 1
         times = np.linspace(0, segment_time, num_samples)
@@ -701,17 +705,19 @@ class RampPlanner:
         self.ax.set_xlabel("Position X")
         self.ax.set_ylabel("Position Y")
 
-        # Draw start and goal
-        start_node = self.forward_tree[0]  # Start node is the root of the forward tree
-        goal_node = self.backward_tree[0]  # Goal node is the root of the backward tree
-
         # Draw start node
-        self.ax.scatter(start_node.state[0], start_node.state[1], c='green', label="Start")
-        self._draw_velocity_arrow(start_node.state[:2], start_node.state[2:], 'green')  # Start velocity
+        self.ax.scatter(self.start.state[0], self.start.state[1], c='green', label="Start")
+        self._draw_velocity_arrow(self.start.state[:2], self.start.state[2:], 'green')  # Start velocity
+
+        self._draw_node(self.forward_tree[0], color='g')
+        self._draw_edge(self.forward_tree[0], self.start, color='green')
 
         # Draw goal node
-        self.ax.scatter(goal_node.state[0], goal_node.state[1], c='red', label="Goal")
-        self._draw_velocity_arrow(goal_node.state[:2], goal_node.state[2:], 'red')  # Goal velocity
+        self.ax.scatter(self.goal.state[0], self.goal.state[1], c='red', label="Goal")
+        self._draw_velocity_arrow(self.goal.state[:2], self.goal.state[2:], 'red')  # Goal velocity
+
+        self._draw_node(self.backward_tree[0], color='r')
+        self._draw_edge(self.backward_tree[0], self.goal, color='red')
 
         # Add obstacles if provided
         if self.visualization_args and "obstacles" in self.visualization_args:
@@ -721,7 +727,7 @@ class RampPlanner:
         self.ax.legend()
 
         plt.show(block=False)
-        plt.pause(0.25)
+        plt.pause(0.5)
 
     def _draw_velocity_arrow(self, position, velocity, color):
         """
@@ -768,7 +774,7 @@ class RampPlanner:
                     continue
 
                 # Draw the node and velocity arrow
-                self._draw_node(node, color, tree_type)
+                self._draw_node(node, color)
 
                 # Get parent node
                 parent_node = node.parent
@@ -807,14 +813,13 @@ class RampPlanner:
         plt.show(block=False)
         plt.pause(0.5)
 
-    def _draw_node(self, node, color, tree_type):
+    def _draw_node(self, node, color):
         """
         Plot a node and its velocity arrow.
 
         Args:
             node (Node): The node to plot.
             color (str): The color for the node and arrow.
-            tree_type (str): The type of the tree ('forward' or 'backward') for legend labeling.
         """
         pos, vel = node.state[:2], node.state[2:]
         self.ax.plot(pos[0], pos[1], f'{color}o', markersize=3)
@@ -830,8 +835,8 @@ class RampPlanner:
             color (str): The color for the trajectory line.
             linewidth (float): The width of the trajectory line.
         """
-        if to_node.segment_time is None or to_node.trajectory_info is None:
-            return  # Skip if trajectory info is missing
+        if to_node.segment_time==0:
+            return  # Skip if trajectory is not meaningful.
 
         positions, velocities = [], []
         times = np.linspace(0, np.sum(to_node.segment_time), 10)  # Time steps for visualization
