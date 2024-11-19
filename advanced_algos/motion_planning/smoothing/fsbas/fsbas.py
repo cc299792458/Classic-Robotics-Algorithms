@@ -590,16 +590,6 @@ class FSBAS:
             self._ax.grid(True)
             self._ax.axis("equal")
 
-            # Plot the initial trajectory
-            initial_positions = np.array([state[0] for state in self.path])
-            self._ax.plot(initial_positions[:, 0], initial_positions[:, 1], 'y--', label='Initial Trajectory')
-
-            # Line for the current smoothed trajectory
-            self._trajectory_line, = self._ax.plot([], [], '-o', markersize=2, label='Smoothed Trajectory')
-
-            # Plot the milestones
-            self._milestones, = self._ax.plot([], [], 'ro', markersize=8, label='Milestones')
-
             # Add obstacles if provided
             if obstacles is not None:
                 # Check if the obstacle label has already been added
@@ -614,6 +604,16 @@ class FSBAS:
                         self._obstacle_label_added = True
                     else:
                         self._ax.add_patch(plt.Rectangle((x, y), width, height, color="gray", alpha=0.5))
+
+            # Plot the initial trajectory
+            initial_positions = np.array([state[0] for state in self.path])
+            self._ax.plot(initial_positions[:, 0], initial_positions[:, 1], 'y--', label='Initial Trajectory')
+
+            # Line for the current smoothed trajectory
+            self._trajectory_line, = self._ax.plot([], [], '-o', markersize=2, label='Smoothed Trajectory')
+
+            # Plot the milestones
+            self._milestones, = self._ax.plot([], [], 'ro', markersize=8, label='Milestones')
 
             # Place legend in the upper-left corner
             self._ax.legend(loc="upper left")

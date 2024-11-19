@@ -62,7 +62,7 @@ if __name__ == '__main__':
     )
 
     # Run the planner
-    path = planner.plan(smooth_iterations=smooth_iterations, visualize=False, visualization_args=dict(obstacles=obstacles))
+    path = planner.plan(smooth_iterations=smooth_iterations, visualize=True, visualization_args=dict(obstacles=obstacles))
 
     # Output the results
     if path:

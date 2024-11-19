@@ -746,20 +746,6 @@ class RampPlanner:
         self.ax.set_xlabel("Position X")
         self.ax.set_ylabel("Position Y")
 
-        # Draw start node
-        self.ax.scatter(self.start.state[0], self.start.state[1], c='green', label="Start")
-        self._draw_velocity_arrow(self.start.state[:2], self.start.state[2:], 'green')  # Start velocity
-
-        self._draw_node(self.forward_tree[0], color='g')
-        self._draw_edge(self.forward_tree[0], self.start, color='green')
-
-        # Draw goal node
-        self.ax.scatter(self.goal.state[0], self.goal.state[1], c='red', label="Goal")
-        self._draw_velocity_arrow(self.goal.state[:2], self.goal.state[2:], 'red')  # Goal velocity
-
-        self._draw_node(self.backward_tree[0], color='r')
-        self._draw_edge(self.backward_tree[0], self.goal, color='red')
-
         # Add obstacles if provided
         if self.visualization_args and "obstacles" in self.visualization_args:
             # Check if the obstacle label has already been added
@@ -774,6 +760,20 @@ class RampPlanner:
                     self._obstacle_label_added = True
                 else:
                     self.ax.add_patch(plt.Rectangle((x, y), width, height, color="gray", alpha=0.5))
+
+        # Draw start node
+        self.ax.scatter(self.start.state[0], self.start.state[1], c='green', label="Start")
+        self._draw_velocity_arrow(self.start.state[:2], self.start.state[2:], 'green')  # Start velocity
+
+        self._draw_node(self.forward_tree[0], color='g')
+        self._draw_edge(self.forward_tree[0], self.start, color='green')
+
+        # Draw goal node
+        self.ax.scatter(self.goal.state[0], self.goal.state[1], c='red', label="Goal")
+        self._draw_velocity_arrow(self.goal.state[:2], self.goal.state[2:], 'red')  # Goal velocity
+
+        self._draw_node(self.backward_tree[0], color='r')
+        self._draw_edge(self.backward_tree[0], self.goal, color='red')
 
         self.ax.legend(loc="upper left")
 
