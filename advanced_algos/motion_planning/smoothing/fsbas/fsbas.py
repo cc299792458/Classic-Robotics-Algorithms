@@ -356,14 +356,13 @@ class FSBAS:
         if not self._is_segment_collision_free(end_state, next_state, connect_time_after, connect_trajectory_after):
             return None
 
-        # Update path
+        # Update path, segment_time and segment_trajectory using np.concatenate
         self.path = np.concatenate([
             self.path[:start_index + 1],
             [start_state, end_state],
             self.path[end_index + 1:]
         ])
 
-        # Update segment_time and segment_trajectory using np.concatenate
         before_time = self.segment_time[:start_index]
         after_time = self.segment_time[end_index + 1:]
         self.segment_time = np.concatenate([
