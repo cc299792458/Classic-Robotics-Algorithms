@@ -209,7 +209,6 @@ class FSBAS:
             velocity[dim] = vel
 
         return position, velocity
-
     
     def _compute_optimal_segment(self, start_state, end_state):
         segment_time = self._calculate_segment_time(start_state, end_state)

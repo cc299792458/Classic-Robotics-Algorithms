@@ -67,8 +67,9 @@ class RampPlanner:
 
         self.init_weights()
 
-        self.visualization = False
         self.path = None
+        self.smoothed_path = None
+        self.visualization = False
 
     def init_weights(self):
         # Compute weights based on position and velocity limits
@@ -126,14 +127,16 @@ class RampPlanner:
                     if isinstance(result, list):  # If the result is the connected path
                         # Apply path smoothing and return the final path
                         reconstructed_path = self.reconstruct_path(result)
-                        smoothed_path = self.smooth_path(reconstructed_path)
-                        self.path = smoothed_path
+                        self.path = reconstructed_path
+                        if self.visualization:
+                            self._update_plot()
 
+                        self.smoothed_path = self.smooth_path(reconstructed_path, max_iterations=100)
                         if self.visualization:
                             self._update_plot()
 
                         # Return the smoothed path as a list of states
-                        return [node.state for node in smoothed_path]
+                        return [node.state for node in self.smoothed_path]
                     else:
                         # Handle the infeasible result (could be an edge or other issue)
                         self.remove_infeasible_edge(result)
@@ -293,8 +296,8 @@ class RampPlanner:
             return None
 
         # Construct paths for both trees
-        path1 = self._construct_path(nearest_node)
-        path2 = self._construct_path(node)
+        path1 = self._trace_path(nearest_node)
+        path2 = self._trace_path(node)
 
         paths = [path1, path2]
 
@@ -347,15 +350,14 @@ class RampPlanner:
 
         return reconstructed_path
     
-    def smooth_path(self, path):
+    def smooth_path(self, path, max_iterations=10):
+        path_state = np.array([node.state.reshape(2, self.dimension) for node in path])
+        fsbas = FSBAS(path=path_state, vmax=self.vmax, amax=self.amax, collision_checker=self.collision_checker, max_iterations=max_iterations)
+        smoothed_path = fsbas.smooth_path()
+
+        path = self._construct_path(smoothed_path)
         
         return path
-
-        path_state = [node.state.reshape(2, self.dimension) for node in path]
-        fsbas = FSBAS(path=path_state, vmax=self.vmax, amax=self.amax, collision_checker=self.collision_checker, max_iterations=10)
-        fsbas.smooth_path()
-        
-        return fsbas.path 
 
     def remove_infeasible_edge(self, infeasible_edge):
         """
@@ -545,7 +547,7 @@ class RampPlanner:
         # Concatenate position and velocity
         return np.concatenate([random_position, zero_velocity])
     
-    def _construct_path(self, node):
+    def _trace_path(self, node):
         """
         Construct a path by tracing back from a given node to the root.
 
@@ -604,6 +606,37 @@ class RampPlanner:
             combined_path.append(self.goal)
 
         return combined_path
+    
+    def _construct_path(self, smoothed_path):
+        """
+        Construct a path for the smoothed path in the form of this class.
+        """
+        constructed_path = []
+
+        for i in range(smoothed_path.shape[0]):
+            new_node = Node(
+                state=smoothed_path[i].reshape(-1),
+                tree_type="forward",  # Unified tree type for the smoothed path
+                parent=None,          # Parent will be updated dynamically
+            )
+
+            if i > 0:  # Recalculate trajectory with the previous node
+                prev_node = constructed_path[-1]
+
+                segment_time, trajectory_info = self._compute_optimal_segment(
+                    prev_node.state.reshape(2, self.dimension),
+                    new_node.state.reshape(2, self.dimension)
+                )
+                new_node.segment_time = segment_time
+                new_node.trajectory_info = trajectory_info
+
+                # Set parent relationship
+                new_node.parent = prev_node
+                prev_node.children.append(new_node)
+
+            constructed_path.append(new_node)
+
+        return constructed_path
     
     def _check_paths_collision(self, paths):
         """
@@ -822,9 +855,11 @@ class RampPlanner:
                 # Delete from edge tracking dictionary
                 del self.edges[tree_type][edge_key]
 
-        if self.path is not None:
-            self._draw_path()
-
+        if self.smoothed_path is not None:
+            self._draw_path(path=self.smoothed_path, color='orange', label='Smoothed Path')
+        elif self.path is not None:
+            self._draw_path(path=self.path, color='blue', label='Path')
+        
         # Add legend if not already added
         if not hasattr(self, "_legend_added") or not self._legend_added:
             handles, labels = self.ax.get_legend_handles_labels()
@@ -881,31 +916,30 @@ class RampPlanner:
 
         return line_obj
     
-    def _draw_path(self, color='orange', point_size=5, linewidth=1.5):
+    def _draw_path(self, path, color='blue', label='Path', point_size=5, linewidth=1.5):
         """
-        Visualize the final smoothed path on the plot using _draw_edge, and draw the nodes (points) along the path.
+        Visualize the path on the plot using _draw_edge, and draw the nodes (points) along the path.
 
         Args:
-            color (str): The color and style of the path line (default is 'orange').
+            path: The path to draw.
+            color (str): The color and style of the path line (default is 'blue').
+            label (str): The label of the path line (default is 'Path').
             point_size (float): The size of the points (default is 5).
             linewidth (float): The width of the path line (default is 1.5).
         """    
-        if not hasattr(self, 'path') or self.path is None:
-            return  # No path to draw
-
         # Iterate through consecutive nodes in the path
-        for i in range(len(self.path)):
-            current_node = self.path[i]
+        for i in range(len(path)):
+            current_node = path[i]
 
             # Draw the point (node)
             self.ax.scatter(
                 current_node.state[0], current_node.state[1], 
-                c=color, s=point_size, label="Path Point" if i == 0 else None
+                c=color, s=point_size, label=label if i == 0 else None
             )
 
             # Draw the edge connecting this node to the previous one
             if i > 0:
-                start_node = self.path[i - 1]
+                start_node = path[i - 1]
                 end_node = current_node
 
                 if end_node.segment_time is None or end_node.trajectory_info is None:
@@ -1045,6 +1079,9 @@ class RampPlanner:
                 start_state, end_state, segment_time
             )
         
+        if segment_time is None or segment_trajectory is None:
+            raise ValueError("Invalid trajectory!")
+        
         return segment_time, segment_trajectory
     
     def _calculate_segment_time(self, start_state, end_state, safe_margin=1e-6):
@@ -1077,10 +1114,16 @@ class RampPlanner:
                 start_vel=start_state[1][dim],
                 end_vel=end_state[1][dim],
                 vmax=self.vmax[dim],
-                T=segment_time
+                T=segment_time,
+                dim=dim,
             )
             for dim in range(self.dimension)
         ]
+
+        # Return None if the trajectory doesn't exist
+        if None in trajectory_data:
+            return None
+
         return np.array(trajectory_data, dtype=object)
 
     def _univariate_time_optimal_interpolants(self, start_pos, end_pos, start_vel, end_vel, vmax, amax):
@@ -1108,11 +1151,7 @@ class RampPlanner:
         
         # Class P+P-
         def compute_p_plus_p_minus():
-            coefficients = [
-                amax,
-                2 * v1,
-                (v1**2 - v2**2) / (2 * amax) + x1 - x2
-            ]
+            coefficients = [amax, 2 * v1, (v1**2 - v2**2) / (2 * amax) + x1 - x2]
             solutions = solve_quadratic(*coefficients)
             valid_t = [t for t in solutions if max((v2 - v1) / amax, 0) <= t <= (vmax - v1) / amax]
             if not valid_t:
@@ -1123,11 +1162,7 @@ class RampPlanner:
 
         # Class P-P+
         def compute_p_minus_p_plus():
-            coefficients = [
-                amax,
-                -2 * v1,
-                (v1**2 - v2**2) / (2 * amax) + x2 - x1
-            ]
+            coefficients = [amax, -2 * v1, (v1**2 - v2**2) / (2 * amax) + x2 - x1]
             solutions = solve_quadratic(*coefficients)
             valid_t = [t for t in solutions if max((v1 - v2) / amax, 0) <= t <= (vmax + v1) / amax]
             if not valid_t:
@@ -1164,7 +1199,7 @@ class RampPlanner:
         times = [t for t in [t_p_plus_p_minus, t_p_minus_p_plus, t_p_plus_l_plus_p_minus, t_p_minus_l_plus_p_plus] if t is not None]
         return np.min(times) if times else None
     
-    def _minimum_acceleration_interpolants(self, start_pos, end_pos, start_vel, end_vel, vmax, T):
+    def _minimum_acceleration_interpolants(self, start_pos, end_pos, start_vel, end_vel, vmax, T, dim, t_margin=1e-8, a_margin=1e-6):
         """
         Compute the minimum-acceleration trajectory for fixed end time T.
 
@@ -1173,6 +1208,9 @@ class RampPlanner:
         - start_vel, end_vel: Initial and final velocities.
         - vmax: Maximum velocity.
         - T: Fixed end time.
+        - dim: Current dimension.
+        - t_margin: A small time margin to compensate for numerical precision errors
+        - a_margin: A small acceleration margin to compensate for numerical precision errors
 
         Return:
         - a_min: Minimal acceleration for valid motion primitive combinations, or None if no valid combination exists.
@@ -1190,35 +1228,27 @@ class RampPlanner:
 
         # Class P+P-
         def compute_p_plus_p_minus():
-            coefficients = [
-                T**2,
-                2 * T * (v1 + v2) + 4 * (x1 - x2),
-                -(v2 - v1)**2
-            ]
+            coefficients = [T**2, 2 * T * (v1 + v2) + 4 * (x1 - x2), -(v2 - v1)**2]
             solutions = solve_quadratic(*coefficients)
             valid_a = []
             for a in solutions:
                 if a <= 0:
                     continue
                 t_s = 0.5 * (T + (v2 - v1) / a)
-                if 0 < t_s < T and abs(v1 + a * t_s) <= vmax:
+                if 0 < t_s < T + t_margin and abs(v1 + a * t_s) <= vmax:
                     valid_a.append(a)
             return (min(valid_a), 'P+P-') if valid_a else None
 
         # Class P-P+
         def compute_p_minus_p_plus():
-            coefficients = [
-                T**2,
-                -2 * T * (v1 + v2) - 4 * (x1 - x2),
-                -(v2 - v1)**2
-            ]
+            coefficients = [T**2, -2 * T * (v1 + v2) - 4 * (x1 - x2), -(v2 - v1)**2]
             solutions = solve_quadratic(*coefficients)
             valid_a = []
             for a in solutions:
                 if a <= 0:
                     continue
                 t_s = 0.5 * (T + (v1 - v2) / a)
-                if 0 < t_s < T and abs(v1 - a * t_s) <= vmax:
+                if 0 < t_s < T + t_margin and abs(v1 - a * t_s) <= vmax:
                     valid_a.append(a)
             return (min(valid_a), 'P-P+') if valid_a else None
 
@@ -1256,8 +1286,15 @@ class RampPlanner:
         valid_results = [result for result in results if result is not None]
 
         if not valid_results:
-            return None, None
+            raise ValueError("No valid result")
 
         # Find the minimum acceleration and corresponding primitive
         a_min, selected_primitive = min(valid_results, key=lambda x: x[0])
+
+        if a_min <= self.amax[dim] + a_margin:
+            a_min = np.clip(a_min, 0, self.amax[dim])  
+        else: 
+            # Return None if the acceleration exceeds the limit
+            return None
+
         return a_min, selected_primitive

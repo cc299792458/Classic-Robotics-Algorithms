@@ -15,7 +15,10 @@ def collision_checker(state, obstacles):
     Returns:
         bool: True if in collision, False otherwise.
     """
-    position = state[:2]
+    if isinstance(state, np.ndarray) and (state.shape == (2,) or state.shape == (4,)):
+        position = state[:2]
+    elif isinstance(state, tuple) and ((len(state) == 1) or len(state) == 2):
+        position = state[0]
     x, y = position
     for (ox, oy, width, height) in obstacles:
         if ox <= x <= ox + width and oy <= y <= oy + height:
