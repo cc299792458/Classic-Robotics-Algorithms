@@ -33,6 +33,7 @@ class FSBAS:
         self.segment_time = np.array([])  # Array of time durations for each segment
         self.segment_trajectory = []  # List of trajectories for each segment
         self.obstacles = obstacles
+        self.total_time = []
 
     def smooth_path(self, plot_trajectory=False):
         """
@@ -47,6 +48,7 @@ class FSBAS:
 
         for iteration in range(self.max_iterations):
             total_time = np.sum(self.segment_time)
+            self.total_time.append(total_time)
             if plot_trajectory:
                 self.plot_trajectory(iteration, obstacles=self.obstacles)
             t1, t2 = self._select_random_times(total_time)
@@ -55,10 +57,9 @@ class FSBAS:
 
             shortcut_time, shortcut_trajectory = self._compute_optimal_segment(start_state, end_state)
             
-            # Only update if the trajectory exists and can reduce the total time
-            if shortcut_trajectory is not None and shortcut_time < t2 - t1:
-                if self._is_segment_collision_free(start_state, end_state, shortcut_time, shortcut_trajectory):
-                    self._update_segment_data(start_state, end_state, t1, t2, shortcut_time, shortcut_trajectory)
+            # Only update if the trajectory exists
+            if shortcut_trajectory is not None:
+                self._update_segment_data(start_state, end_state, t1, t2, shortcut_time, shortcut_trajectory)
 
         return self.path
     
@@ -95,6 +96,9 @@ class FSBAS:
             )
             for dim in range(self.dimension)
         ])
+        if None in t_requireds:
+            return None
+
         return np.max(t_requireds) + safe_margin
 
     def _calculate_segment_trajectory(self, start_state, end_state, segment_time):
@@ -211,7 +215,7 @@ class FSBAS:
         segment_time = self._calculate_segment_time(start_state, end_state)
         segment_trajectory = self._calculate_segment_trajectory(
                 start_state, end_state, segment_time
-            )
+            ) if segment_time is not None else None
         
         return segment_time, segment_trajectory
 
@@ -307,6 +311,8 @@ class FSBAS:
         """
         Update the trajectory and path by replacing the section between t1 and t2 with a shortcut.
         Also inserts connecting segments to ensure continuity.
+        Collision checking and time reduction checking are performed at this step 
+        to ensure the validity and efficiency of the connection trajectory.
 
         Input:
         - start_state, end_state: States at t1 and t2 respectively.
@@ -327,6 +333,10 @@ class FSBAS:
         if start_index is None or end_index is None:
             raise ValueError("Invalid times t1 or t2, cannot find affected segments.")
 
+        # Get total time of affected segments between start_index and end_index
+        middle_segment_times = self.segment_time[start_index:end_index+1]
+        total_middle_time = np.sum(middle_segment_times)
+
         # Locate the start and end nodes for connection
         prev_state = self.path[start_index]  # Previous node before t1
         connect_time_before, connect_trajectory_before = self._compute_optimal_segment(prev_state, start_state)
@@ -334,8 +344,16 @@ class FSBAS:
         next_state = self.path[end_index + 1]  # Next node after t2
         connect_time_after, connect_trajectory_after = self._compute_optimal_segment(end_state, next_state)
 
-        # Cancel update if the connection trajectory is invalid
+        # Cancel update if the connection trajectory is invalid, does not reduce total time, or is not collision-free
         if connect_time_before is None or connect_trajectory_after is None:
+            return None
+        if total_middle_time < connect_time_before + shortcut_time + connect_time_after:
+            return None
+        if not self._is_segment_collision_free(start_state, end_state, shortcut_time, shortcut_trajectory):
+            return None
+        if not self._is_segment_collision_free(prev_state, start_state, connect_time_before, connect_trajectory_before):
+            return None
+        if not self._is_segment_collision_free(end_state, next_state, connect_time_after, connect_trajectory_after):
             return None
 
         # Update path

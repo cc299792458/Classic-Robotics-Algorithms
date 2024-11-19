@@ -51,7 +51,7 @@ if __name__ == '__main__':
     fsbas = FSBAS(path, vmax, amax, lambda state: collision_checker(state, obstacles), max_iterations=200, obstacles=obstacles)
 
     # Perform trajectory smoothing
-    path = fsbas.smooth_path(plot_trajectory=False)
+    path = fsbas.smooth_path(plot_trajectory=True)
 
     if path is not None:
         for idx, state in enumerate(path):
