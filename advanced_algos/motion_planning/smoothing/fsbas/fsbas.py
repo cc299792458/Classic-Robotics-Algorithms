@@ -451,7 +451,7 @@ class FSBAS:
         times = [t for t in [t_p_plus_p_minus, t_p_minus_p_plus, t_p_plus_l_plus_p_minus, t_p_minus_l_plus_p_plus] if t is not None]
         return np.min(times) if times else None
     
-    def _minimum_acceleration_interpolants(self, start_pos, end_pos, start_vel, end_vel, vmax, T, dim, t_margin=1e-8, a_margin=1e-6):
+    def _minimum_acceleration_interpolants(self, start_pos, end_pos, start_vel, end_vel, vmax, T, dim, t_margin=1e-5, a_margin=1e-6):
         """
         Compute the minimum-acceleration trajectory for fixed end time T.
 

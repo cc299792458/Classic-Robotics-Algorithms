@@ -80,14 +80,15 @@ class RampPlanner:
         # Combine position and velocity weights
         self.weights = np.concatenate([position_weights, velocity_weights])
 
-    def plan(self, visualize=False, visualization_args=None):
+    def plan(self, smooth_iterations=10, visualize=False, visualization_args=None):
         """
         Plan the trajectory from the start to the goal state.
 
         Args:
+            smooth_iterations: Number of smooth iteration
             visualize (bool): Whether to visualize the planning process.
             visualization_args (dict or None): Additional arguments for visualization, such as obstacles.
-
+            
         Returns:
             list of np.ndarray or None: Planned trajectory as a list of concatenated position and velocity vectors if successful, else None.
         """
@@ -131,7 +132,7 @@ class RampPlanner:
                         if self.visualization:
                             self._update_plot()
 
-                        self.smoothed_path = self.smooth_path(reconstructed_path, max_iterations=100)
+                        self.smoothed_path = self.smooth_path(reconstructed_path, max_iterations=smooth_iterations)
                         if self.visualization:
                             self._update_plot()
 
@@ -949,7 +950,7 @@ class RampPlanner:
                 self._draw_edge(start_node, end_node, color=color, linewidth=linewidth)
 
         # Add a legend for the path points
-        self.ax.legend()
+        self.ax.legend(loc="upper left")
 
     ############### Trajectory Generation ###############
     def _get_state_in_segment(self, start_state, end_state, segment_time, segment_trajectory, t):
@@ -1075,9 +1076,7 @@ class RampPlanner:
 
     def _compute_optimal_segment(self, start_state, end_state):
         segment_time = self._calculate_segment_time(start_state, end_state)
-        segment_trajectory = self._calculate_segment_trajectory(
-                start_state, end_state, segment_time
-            )
+        segment_trajectory = self._calculate_segment_trajectory(start_state, end_state, segment_time)
         
         if segment_time is None or segment_trajectory is None:
             raise ValueError("Invalid trajectory!")
@@ -1199,7 +1198,7 @@ class RampPlanner:
         times = [t for t in [t_p_plus_p_minus, t_p_minus_p_plus, t_p_plus_l_plus_p_minus, t_p_minus_l_plus_p_plus] if t is not None]
         return np.min(times) if times else None
     
-    def _minimum_acceleration_interpolants(self, start_pos, end_pos, start_vel, end_vel, vmax, T, dim, t_margin=1e-8, a_margin=1e-6):
+    def _minimum_acceleration_interpolants(self, start_pos, end_pos, start_vel, end_vel, vmax, T, dim, t_margin=1e-4, a_margin=1e-6):
         """
         Compute the minimum-acceleration trajectory for fixed end time T.
 
