@@ -129,7 +129,8 @@ class RampPlanner:
                         smoothed_path = self.smooth_path(reconstructed_path)
                         self.path = smoothed_path
 
-                        self._update_plot()
+                        if self.visualization:
+                            self._update_plot()
 
                         # Return the smoothed path as a list of states
                         return [node.state for node in smoothed_path]
@@ -347,6 +348,9 @@ class RampPlanner:
         return reconstructed_path
     
     def smooth_path(self, path):
+        
+        return path
+
         path_state = [node.state.reshape(2, self.dimension) for node in path]
         fsbas = FSBAS(path=path_state, vmax=self.vmax, amax=self.amax, collision_checker=self.collision_checker, max_iterations=10)
         fsbas.smooth_path()
@@ -426,7 +430,8 @@ class RampPlanner:
             current_node = old_parent
 
         # Update the visualization
-        self._update_plot()
+        if self.visualization:
+            self._update_plot()
 
     def _check_state_limits(self, state):
         """

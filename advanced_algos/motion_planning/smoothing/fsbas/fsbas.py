@@ -70,7 +70,7 @@ class FSBAS:
 
         self.segment_time = np.array(segment_times)
 
-    def _calculate_segment_time(self, start_state, end_state, safe_margin=1e-6):
+    def _calculate_segment_time(self, start_state, end_state, safe_margin=1e-15):
         """
         Calculate the maximum time required to traverse a segment across all dimensions,
         considering vmax and amax constraints.
@@ -517,6 +517,9 @@ class FSBAS:
 
         # Find the minimum acceleration and corresponding primitive
         a_min, selected_primitive = min(valid_results, key=lambda x: x[0])
+
+        assert a_min <= 1.0
+
         return a_min, selected_primitive
 
     def _is_segment_collision_free(self, start_state, end_state, segment_time, segment_trajectory, time_step=0.01):
