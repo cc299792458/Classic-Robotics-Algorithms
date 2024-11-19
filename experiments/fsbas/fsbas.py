@@ -48,7 +48,12 @@ if __name__ == '__main__':
     amax = [1.0, 1.0]  # [amax_x, amax_y]
 
     # Initialize the FSBAS object
-    fsbas = FSBAS(path, vmax, amax, lambda state: collision_checker(state, obstacles), max_iterations=100, obstacles=obstacles)
+    fsbas = FSBAS(path, vmax, amax, lambda state: collision_checker(state, obstacles), max_iterations=200, obstacles=obstacles)
 
     # Perform trajectory smoothing
-    fsbas.smooth_path(plot_trajectory=True)
+    path = fsbas.smooth_path(plot_trajectory=False)
+
+    if path is not None:
+        for idx, state in enumerate(path):
+            pos, vel = state[0], state[1]
+            print(f"Step {idx + 1}: Position = {pos}, Velocity = {vel}")

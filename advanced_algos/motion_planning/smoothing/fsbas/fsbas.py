@@ -41,7 +41,9 @@ class FSBAS:
         Returns:
         - Updated path as a numpy array of waypoints [(position, velocity)].
         """
-        self._generate_initial_trajectory()
+        # The algorithm fails if the initial step fails
+        if not self._generate_initial_trajectory():
+            return None
 
         for iteration in range(self.max_iterations):
             total_time = np.sum(self.segment_time)
@@ -52,8 +54,11 @@ class FSBAS:
             end_state = self._get_state_at_time(t2)
 
             shortcut_time, shortcut_trajectory = self._compute_optimal_segment(start_state, end_state)
-            if self._is_segment_collision_free(start_state, end_state, shortcut_time, shortcut_trajectory):
-                self._update_segment_data(start_state, end_state, t1, t2, shortcut_time, shortcut_trajectory)
+            
+            # Only update if the trajectory exists and can reduce the total time
+            if shortcut_trajectory is not None and shortcut_time < t2 - t1:
+                if self._is_segment_collision_free(start_state, end_state, shortcut_time, shortcut_trajectory):
+                    self._update_segment_data(start_state, end_state, t1, t2, shortcut_time, shortcut_trajectory)
 
         return self.path
     
@@ -65,10 +70,14 @@ class FSBAS:
         for i in range(self.path.shape[0] - 1):
             start_state, end_state = self.path[i], self.path[i + 1]
             segment_time, segment_trajectory = self._compute_optimal_segment(start_state, end_state)
+            if segment_trajectory is None:
+                return False
             segment_times.append(segment_time)
             self.segment_trajectory.append(segment_trajectory)
 
         self.segment_time = np.array(segment_times)
+
+        return True
 
     def _calculate_segment_time(self, start_state, end_state, safe_margin=1e-15):
         """
@@ -100,24 +109,33 @@ class FSBAS:
                 start_vel=start_state[1][dim],
                 end_vel=end_state[1][dim],
                 vmax=self.vmax[dim],
-                T=segment_time
+                T=segment_time,
+                dim=dim,
             )
             for dim in range(self.dimension)
         ]
+
+        # Return None if the trajectory doesn't exist
+        if None in trajectory_data:
+            return None
+
         return np.array(trajectory_data, dtype=object)
     
-    def _select_random_times(self, total_time):
+    def _select_random_times(self, total_time, min_time_interval=0.01):
         """
         Select two random times within the total trajectory duration.
 
         Input:
         - total_time: The total duration of the trajectory
+        - min_time_interval: Minimal time interval between t1 and t2
 
         Return:
         - t1, t2: Two random times within the total trajectory duration.
         """
-        random_times = np.random.uniform(0, total_time, 2)
-        t1, t2 = np.sort(random_times)
+        t1 = t2 = 0
+        while t2 - t1 < min_time_interval:
+            random_times = np.random.uniform(0, total_time, 2)
+            t1, t2 = np.sort(random_times)
         return t1, t2
 
     def _get_state_at_time(self, t):
@@ -316,6 +334,10 @@ class FSBAS:
         next_state = self.path[end_index + 1]  # Next node after t2
         connect_time_after, connect_trajectory_after = self._compute_optimal_segment(end_state, next_state)
 
+        # Cancel update if the connection trajectory is invalid
+        if connect_time_before is None or connect_trajectory_after is None:
+            return None
+
         # Update path
         self.path = np.concatenate([
             self.path[:start_index + 1],
@@ -365,11 +387,7 @@ class FSBAS:
         
         # Class P+P-
         def compute_p_plus_p_minus():
-            coefficients = [
-                amax,
-                2 * v1,
-                (v1**2 - v2**2) / (2 * amax) + x1 - x2
-            ]
+            coefficients = [amax, 2 * v1, (v1**2 - v2**2) / (2 * amax) + x1 - x2]
             solutions = solve_quadratic(*coefficients)
             valid_t = [t for t in solutions if max((v2 - v1) / amax, 0) <= t <= (vmax - v1) / amax]
             if not valid_t:
@@ -380,11 +398,7 @@ class FSBAS:
 
         # Class P-P+
         def compute_p_minus_p_plus():
-            coefficients = [
-                amax,
-                -2 * v1,
-                (v1**2 - v2**2) / (2 * amax) + x2 - x1
-            ]
+            coefficients = [amax, -2 * v1, (v1**2 - v2**2) / (2 * amax) + x2 - x1]
             solutions = solve_quadratic(*coefficients)
             valid_t = [t for t in solutions if max((v1 - v2) / amax, 0) <= t <= (vmax + v1) / amax]
             if not valid_t:
@@ -421,7 +435,7 @@ class FSBAS:
         times = [t for t in [t_p_plus_p_minus, t_p_minus_p_plus, t_p_plus_l_plus_p_minus, t_p_minus_l_plus_p_plus] if t is not None]
         return np.min(times) if times else None
     
-    def _minimum_acceleration_interpolants(self, start_pos, end_pos, start_vel, end_vel, vmax, T):
+    def _minimum_acceleration_interpolants(self, start_pos, end_pos, start_vel, end_vel, vmax, T, dim, t_margin=1e-8, a_margin=1e-6):
         """
         Compute the minimum-acceleration trajectory for fixed end time T.
 
@@ -430,6 +444,9 @@ class FSBAS:
         - start_vel, end_vel: Initial and final velocities.
         - vmax: Maximum velocity.
         - T: Fixed end time.
+        - dim: Current dimension.
+        - t_margin: A small time margin to compensate for numerical precision errors
+        - a_margin: A small acceleration margin to compensate for numerical precision errors
 
         Return:
         - a_min: Minimal acceleration for valid motion primitive combinations, or None if no valid combination exists.
@@ -447,35 +464,27 @@ class FSBAS:
 
         # Class P+P-
         def compute_p_plus_p_minus():
-            coefficients = [
-                T**2,
-                2 * T * (v1 + v2) + 4 * (x1 - x2),
-                -(v2 - v1)**2
-            ]
+            coefficients = [T**2, 2 * T * (v1 + v2) + 4 * (x1 - x2), -(v2 - v1)**2]
             solutions = solve_quadratic(*coefficients)
             valid_a = []
             for a in solutions:
                 if a <= 0:
                     continue
                 t_s = 0.5 * (T + (v2 - v1) / a)
-                if 0 < t_s < T and abs(v1 + a * t_s) <= vmax:
+                if 0 < t_s < T + t_margin and abs(v1 + a * t_s) <= vmax:
                     valid_a.append(a)
             return (min(valid_a), 'P+P-') if valid_a else None
 
         # Class P-P+
         def compute_p_minus_p_plus():
-            coefficients = [
-                T**2,
-                -2 * T * (v1 + v2) - 4 * (x1 - x2),
-                -(v2 - v1)**2
-            ]
+            coefficients = [T**2, -2 * T * (v1 + v2) - 4 * (x1 - x2), -(v2 - v1)**2]
             solutions = solve_quadratic(*coefficients)
             valid_a = []
             for a in solutions:
                 if a <= 0:
                     continue
                 t_s = 0.5 * (T + (v1 - v2) / a)
-                if 0 < t_s < T and abs(v1 - a * t_s) <= vmax:
+                if 0 < t_s < T + t_margin and abs(v1 - a * t_s) <= vmax:
                     valid_a.append(a)
             return (min(valid_a), 'P-P+') if valid_a else None
 
@@ -513,12 +522,16 @@ class FSBAS:
         valid_results = [result for result in results if result is not None]
 
         if not valid_results:
-            return None, None
+            raise ValueError("No valid result")
 
         # Find the minimum acceleration and corresponding primitive
         a_min, selected_primitive = min(valid_results, key=lambda x: x[0])
 
-        assert a_min <= 1.0
+        if a_min <= self.amax[dim] + a_margin:
+            a_min = np.clip(a_min, 0, self.amax[dim])  
+        else: 
+            # Return None if the acceleration exceeds the limit
+            return None
 
         return a_min, selected_primitive
 
@@ -563,10 +576,13 @@ class FSBAS:
 
             # Plot the initial trajectory
             initial_positions = np.array([state[0] for state in self.path])
-            self._ax.plot(initial_positions[:, 0], initial_positions[:, 1], 'r--', label='Initial Trajectory')
+            self._ax.plot(initial_positions[:, 0], initial_positions[:, 1], 'y--', label='Initial Trajectory')
 
             # Line for the current smoothed trajectory
             self._trajectory_line, = self._ax.plot([], [], '-o', markersize=2, label='Smoothed Trajectory')
+
+            # Plot the milestones
+            self._milestones, = self._ax.plot([], [], 'ro', markersize=8, label='Milestones')
 
             # Add obstacles if provided
             if obstacles is not None:
@@ -602,6 +618,10 @@ class FSBAS:
 
         positions = np.array(positions)
         self._trajectory_line.set_data(positions[:, 0], positions[:, 1])
+
+        # Update milestones
+        milestone_positions = np.array([state[0] for state in self.path])
+        self._milestones.set_data(milestone_positions[:, 0], milestone_positions[:, 1])
 
         # Update iteration text
         if iteration is not None:
